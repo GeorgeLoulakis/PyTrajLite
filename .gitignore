@@ -19,3 +19,5 @@ __pycache__/
 # Ignore everything inside raw/Data except the readme file
 data/raw/Data/*
 !data/raw/Data/data_README.md
+
+data/processed/*

@@ -5,11 +5,21 @@ Loads and displays basic statistics about the loaded trajectories.
 
 from pathlib import Path
 from src.loader import load_all_trajectories
+from src.parquet_io import save_trajectories_to_parquet, load_trajectories_from_parquet
 
 if __name__ == "__main__":
-    print("Loading trajectories...")
     data_path = Path("data/raw/Data")
-    trajectories = load_all_trajectories(data_path)
+    parquet_path = Path("data/processed/trajectories.parquet")
+
+    if parquet_path.exists():
+        print("Loading trajectories from Parquet...")
+        trajectories = load_trajectories_from_parquet(parquet_path)
+    else:
+        print("Loading trajectories from PLT files...")
+        trajectories = load_all_trajectories(data_path)
+        print("Saving trajectories to Parquet...")
+        save_trajectories_to_parquet(trajectories, parquet_path)
+
     print(f"Total trajectories loaded: {len(trajectories)}")
 
     total_points = sum(len(traj) for traj in trajectories)
