@@ -7,6 +7,7 @@ def display_menu():
     print("=" * 40)
     print("1. Load trajectories from Parquet (or create it if missing)")
     print("2. Run BBox Query")
+    print("3. Compare Parquet vs CSV (size and read time)")
     print("0. Exit")
     print("=" * 40)
 

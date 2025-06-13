@@ -1,6 +1,6 @@
 '''
 Main entry point for PyTrajLite
-Handles user options, loads data, and manages Parquet generation.
+Handles user options, loads data, and manages Parquet and CSV generation.
 '''
 
 from pathlib import Path
@@ -11,18 +11,20 @@ from src.loader import load_all_trajectories
 from src.parquet_io import save_trajectories_to_parquet
 from src.utils import display_menu, pause_and_clear
 from src.queries.bbox_query import bbox_query
+from src.queries.compare_parquet_vs_csv import compare_parquet_vs_csv
 
 
 if __name__ == "__main__":
     while True:
         display_menu()
-        choice = input("Enter your choice (0-2): ")
+        choice = input("Enter your choice (0-3): ")
 
         if choice == "0":
             print("Exiting PyTrajLite.")
             pause_and_clear()
             break
 
+        # Option 1 – Create and load Parquet from raw data
         elif choice == "1":
             parquet_path = Path("data/processed/trajectories.parquet")
 
@@ -62,10 +64,16 @@ if __name__ == "__main__":
                 print(f"File: {parquet_path}")
                 pause_and_clear()
 
+        # Option 2 – Run a Bounding Box query
         elif choice == "2":
             bbox_query()
             pause_and_clear()
 
+        # Option 3 – Compare Parquet and CSV formats
+        elif choice == "3":
+            compare_parquet_vs_csv()
+            pause_and_clear()
+
         else:
-            print("Invalid option. Please enter 0, 1, or 2.")
+            print("Invalid option. Please enter 0, 1, 2, or 3.")
             pause_and_clear()
