@@ -21,3 +21,5 @@ data/raw/Data/*
 !data/raw/Data/data_README.md
 
 data/processed/*
+
+data/results/*
