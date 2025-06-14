@@ -1,6 +1,6 @@
 import pandas as pd
 from pathlib import Path
-from src.models import Trajectory
+from src.models.base import Trajectory
 
 def save_trajectories_to_parquet(trajectories, output_path: Path):
     """
@@ -29,7 +29,7 @@ def load_trajectories_from_parquet(parquet_path: Path):
     df = pd.read_parquet(parquet_path)
     grouped = df.groupby("traj_id")
 
-    from src.models import Point, Trajectory
+    from models.base import Point, Trajectory
     trajectories = []
     for traj_id, group in grouped:
         points = [
