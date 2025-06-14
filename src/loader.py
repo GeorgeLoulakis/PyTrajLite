@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 from datetime import datetime
 from typing import List
-from src.models.base import Point, Trajectory
+from src.models import Point, Trajectory
 
 def parse_plt_file(file_path: Path) -> Trajectory:
     """
