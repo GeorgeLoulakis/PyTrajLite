@@ -27,13 +27,17 @@ def bbox_query():
     Optionally save all results to a uniquely named CSV file.
     """
     try:
+        parquet_path = "data/processed/trajectories.parquet"
+        if not Path(parquet_path).exists():
+            print("\n[!] Parquet file not found.")
+            print("You must first run option 1 to prepare the data.")
+            return
         print("Enter bounding box coordinates:")
         min_lat = float(input("  Min Latitude: "))
         max_lat = float(input("  Max Latitude: "))
         min_lon = float(input("  Min Longitude: "))
         max_lon = float(input("  Max Longitude: "))
-
-        parquet_path = "data/processed/trajectories.parquet"
+        
         results = run_bbox_query(parquet_path, (min_lat, max_lat, min_lon, max_lon))
 
         if results.empty:
@@ -53,7 +57,6 @@ def bbox_query():
         # Ask user whether to save results
         choice = input("\nDo you want to save all results to CSV? (1 = Yes, 0 = No): ").strip()
         if choice == "1":
-            from pathlib import Path
             output_dir = Path("data/results")
             output_dir.mkdir(parents=True, exist_ok=True)
 
