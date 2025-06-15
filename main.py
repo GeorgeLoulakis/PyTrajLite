@@ -8,7 +8,7 @@ from time import time
 import pandas as pd
 
 from src.loader import load_all_trajectories
-from src.parquet_io import save_trajectories_to_parquet
+from src.fileio import save_trajectories_to_parquet
 from src.utils import display_menu, pause_and_clear
 from src.queries.bbox_query import bbox_query
 from src.queries.compare_parquet_vs_csv import compare_parquet_vs_csv
