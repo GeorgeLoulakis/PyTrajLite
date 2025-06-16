@@ -1,10 +1,10 @@
 from src.models import TrajectorySegment
-from datetime import datetime
 
 def segment_trajectory(traj, grid):
     """
-    Splits a trajectory into segments based on cell changes in the grid.
-    The last point of each segment is also included in the next one.
+    Splits a trajectory into segments based on grid cell changes.
+    Implements TrajParquet-style segmentation:
+    The last point of each segment is also added as the first point of the next segment.
     """
     segments = []
     current_vals_x = []
@@ -14,14 +14,14 @@ def segment_trajectory(traj, grid):
     last_cell = None
     segment_id = 0
 
-    for idx, point in enumerate(traj.points):
+    for point in traj.points:
         cell = grid.get_cell_id(point.lat, point.lon)
 
         if last_cell is None:
             last_cell = cell
 
-        if cell != last_cell and len(current_vals_x) > 0:
-            # Close the previous segment
+        # If the point belongs to a new cell, close the current segment
+        if cell != last_cell and current_vals_x:
             seg = TrajectorySegment(
                 entity_id=traj.traj_id,
                 segment_id=segment_id,
@@ -32,17 +32,19 @@ def segment_trajectory(traj, grid):
             segments.append(seg)
             segment_id += 1
 
-            # Start a new segment, keeping the last point
+            # Start a new segment using the last point of the previous segment
             current_vals_x = [current_vals_x[-1]]
             current_vals_y = [current_vals_y[-1]]
             current_vals_t = [current_vals_t[-1]]
 
+        # Add the current point to the segment
         current_vals_x.append(point.lat)
         current_vals_y.append(point.lon)
         current_vals_t.append(point.timestamp.isoformat())
         last_cell = cell
 
-    if len(current_vals_x) > 0:
+    # Save the final segment
+    if current_vals_x:
         seg = TrajectorySegment(
             entity_id=traj.traj_id,
             segment_id=segment_id,
