@@ -31,7 +31,7 @@ def create_parquet_from_raw():
 
     # STEP 1: Create base trajectories.parquet
     if not base_parquet_path.exists():
-        print("Base Parquet file not found. Creating from raw PLT data...\n")
+        print("\nBase Parquet file not found. Creating from raw PLT data...\n")
         start_time = time()
 
         for i, user_dir in enumerate(user_dirs, start=1):
@@ -52,7 +52,7 @@ def create_parquet_from_raw():
             duration = time() - start_time
             print(f"\nBase Parquet file created in {duration:.2f} seconds.")
     else:
-        print("Base Parquet file already exists.")
+        print("\nBase Parquet file already exists.")
         print(f"File: {base_parquet_path}")
         # Load the trajectories since we didn't create them earlier
         trajectories = load_trajectories_from_parquet(base_parquet_path)
