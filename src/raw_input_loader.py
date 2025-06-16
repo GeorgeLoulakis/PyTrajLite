@@ -1,8 +1,5 @@
-import os
 from pathlib import Path
-import pandas as pd
 from datetime import datetime
-from typing import List
 from src.models import Point, Trajectory
 
 def parse_plt_file(file_path: Path) -> Trajectory:
@@ -23,16 +20,3 @@ def parse_plt_file(file_path: Path) -> Trajectory:
 
     traj_id = file_path.stem
     return Trajectory(traj_id=traj_id, points=points)
-
-def load_all_trajectories(data_dir: Path) -> List[Trajectory]:
-    """
-    Traverse data directory and load all .plt files.
-    """
-    trajectories = []
-    for subdir in data_dir.iterdir():
-        if subdir.is_dir():
-            for file in subdir.glob("Trajectory/*.plt"):
-                traj = parse_plt_file(file)
-                if len(traj) > 0:
-                    trajectories.append(traj)
-    return trajectories

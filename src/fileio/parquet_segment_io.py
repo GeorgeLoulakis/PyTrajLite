@@ -13,11 +13,16 @@ def save_segments_to_parquet(segments: list[TrajectorySegment], output_path: Pat
 
 def load_segments_from_parquet(parquet_path: Path) -> list[TrajectorySegment]:
     """
-    Load a Parquet file of TrajectorySegment records.
+    Load a Parquet file of TrajectorySegment records with progress indicator.
     """
     df = pd.read_parquet(parquet_path)
     segments = []
-    for _, row in df.iterrows():
+    total_rows = len(df)
+
+    for i, (_, row) in enumerate(df.iterrows(), start=1):
+        percent = (i / total_rows) * 100
+        print(f"\r[{percent:5.1f}%] Loading segment {row['segment_id']}...", end="")
+
         seg = TrajectorySegment(
             entity_id=row["entity_id"],
             segment_id=row["segment_id"],
@@ -26,4 +31,6 @@ def load_segments_from_parquet(parquet_path: Path) -> list[TrajectorySegment]:
             vals_t=row["vals_t"],
         )
         segments.append(seg)
+
+    print(f"\nLoaded {len(segments)} segments from: {parquet_path}")
     return segments

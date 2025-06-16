@@ -26,14 +26,25 @@ def load_trajectories_from_parquet(parquet_path: Path):
     """
     Load a Parquet file into a list of Trajectory objects.
     """
+    print(f"Loading trajectories from Parquet file: {parquet_path}")
+    
     df = pd.read_parquet(parquet_path)
+    print(f"Loaded DataFrame with {len(df)} rows.")
+
     grouped = df.groupby("traj_id")
+    total_trajs = len(grouped)
+    print(f"Found {total_trajs} unique trajectories.")
 
     trajectories = []
-    for traj_id, group in grouped:
+    for i, (traj_id, group) in enumerate(grouped, start=1):
+        percent = (i / total_trajs) * 100
+        print(f"\r[{percent:5.1f}%] Processing trajectory {traj_id}...", end="")
+
         points = [
             Point(row.lat, row.lon, row.altitude, row.timestamp)
             for row in group.itertuples()
         ]
         trajectories.append(Trajectory(traj_id, points))
+
+    print(f"\nFinished loading {len(trajectories)} trajectories.")
     return trajectories

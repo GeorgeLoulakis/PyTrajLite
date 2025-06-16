@@ -2,9 +2,6 @@ from pathlib import Path
 from time import time
 import pandas as pd
 
-from src.loader import load_all_trajectories
-from src.fileio import save_trajectories_to_parquet
-
 
 def compare_parquet_vs_csv():
     """
