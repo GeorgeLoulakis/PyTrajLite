@@ -11,7 +11,8 @@ import pandas as pd
 from src.raw_input_loader import parse_plt_file
 from src.fileio import save_segments_to_parquet, save_trajectories_to_parquet, load_trajectories_from_parquet, load_segments_from_parquet
 from src.models.grid import Grid
-from src.segmentation import segment_trajectory
+from src.segmentation import segment_trajectory_by_fixed_size
+from src.segmentation import segment_trajectory_by_grid_cell_strict
 from src.utils import display_menu, pause_and_clear
 from src.queries import bbox_query, compare_parquet_vs_csv
 
@@ -70,7 +71,7 @@ def create_parquet_from_raw():
         for i, traj in enumerate(trajectories, start=1):
             percent = (i / total_trajs) * 100
             print(f"\r[{percent:5.1f}%] Segmenting trajectory {traj.traj_id}...", end="")
-            segments = segment_trajectory(traj, grid)
+            segments = segment_trajectory_by_fixed_size(traj, max_segment_size=100)
             all_segments.extend(segments)
 
         duration = time() - start_seg_time

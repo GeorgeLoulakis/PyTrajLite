@@ -1,7 +1,7 @@
 from math import floor
 
 class Grid:
-    def __init__(self, min_lat, max_lat, min_lon, max_lon, cell_size=0.01):
+    def __init__(self, min_lat, max_lat, min_lon, max_lon, cell_size=0.001):
         self.min_lat = min_lat
         self.max_lat = max_lat
         self.min_lon = min_lon
@@ -12,12 +12,12 @@ class Grid:
         """
         Calculates the cell_id as a tuple (i, j) for a given lat, lon
         """
-        i = floor((lat - self.min_lat) / self.cell_size)
-        j = floor((lon - self.min_lon) / self.cell_size)
+        i = int((lat - self.min_lat) / self.cell_size)
+        j = int((lon - self.min_lon) / self.cell_size)
         return (i, j)
 
     @classmethod
-    def from_trajectories(cls, trajectories, cell_size=0.01):
+    def from_trajectories(cls, trajectories, cell_size=0.001):
         """
         Creates a Grid that covers all trajectories
         """
