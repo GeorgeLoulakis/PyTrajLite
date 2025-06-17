@@ -12,7 +12,6 @@ from src.raw_input_loader import parse_plt_file
 from src.fileio import save_segments_to_parquet, save_trajectories_to_parquet, load_trajectories_from_parquet, load_segments_from_parquet
 from src.models.grid import Grid
 from src.segmentation import segment_trajectory_by_fixed_size
-from src.segmentation import segment_trajectory_by_grid_cell_strict
 from src.utils import display_menu, pause_and_clear
 from src.queries import bbox_query, compare_parquet_vs_csv
 
