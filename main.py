@@ -61,7 +61,7 @@ def create_parquet_from_raw():
     if not segment_parquet_path.exists():
         print("\nSegment Parquet file not found. Creating segments using grid-based partitioning...")
 
-        grid = Grid.from_trajectories(trajectories, cell_size=0.01)
+        grid = Grid.from_trajectories(trajectories, cell_size=0.001)
         all_segments = []
 
         total_trajs = len(trajectories)
