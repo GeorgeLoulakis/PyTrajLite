@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import ListedColormap
 from pathlib import Path
 from matplotlib.patches import Rectangle
 from matplotlib.collections import PatchCollection
@@ -42,8 +41,8 @@ def get_grid_cells(traj_df: pd.DataFrame, cell_size: float = 0.001):
     
     return lat_steps, lon_steps, cell_size
 
-def visualize_trajectory(traj_id: str, cell_size: float = 0.001):
-    """Visualize trajectory segments with grid cells"""
+def visualize_points(traj_id: str, cell_size: float = 0.001):
+    """Visualize all trajectory points with segment colors and grid"""
     segments_df = load_trajectory_segments(traj_id)
     
     if segments_df.empty:
@@ -57,13 +56,13 @@ def visualize_trajectory(traj_id: str, cell_size: float = 0.001):
     # Get grid cells that cover this trajectory
     lat_steps, lon_steps, cell_size = get_grid_cells(segments_df, cell_size)
     
-    # Plot grid cells with new colors
+    # Plot grid cells with light colors
     patches = []
     for lat in lat_steps:
         for lon in lon_steps:
             rect = Rectangle((lon, lat), cell_size, cell_size,
-                           linewidth=0.7, edgecolor='#2F4F4F',  # DarkSlateGray outline
-                           facecolor='#ADD8E6', alpha=0.3)  # LightBlue fill
+                           linewidth=0.5, edgecolor='#2F4F4F',  # DarkSlateGray outline
+                           facecolor='#ADD8E6', alpha=0.2)  # Very light blue fill
             patches.append(rect)
     
     pc = PatchCollection(patches, match_original=True)
@@ -72,30 +71,31 @@ def visualize_trajectory(traj_id: str, cell_size: float = 0.001):
     # Create a colormap with distinct colors for segments
     colors = plt.cm.tab20.colors
     
-    # Plot each segment with different color
+    # Plot all points with their segment colors
     for idx, (_, row) in enumerate(segments_df.iterrows()):
-        # Plot trajectory segment with thicker line
-        plt.plot(row['vals_y'], row['vals_x'], 
-                color=colors[idx % len(colors)],
-                linewidth=3.5,  # Thicker line for better visibility
-                label=f'Segment {row["segment_id"]}',
-                alpha=0.9, zorder=10)  # Higher zorder to appear above grid
+        # Plot all points in the segment
+        plt.scatter(row['vals_y'], row['vals_x'],
+                   color=colors[idx % len(colors)],
+                   s=40,  # Smaller point size
+                   alpha=0.8,
+                   label=f'Segment {row["segment_id"]}',
+                   zorder=5)
         
-        # Enhanced markers
-        plt.scatter(row['vals_y'][0], row['vals_x'][0], 
-                  color=colors[idx % len(colors)],
-                  marker='o', s=120, edgecolor='black',
-                  linewidths=1.5, zorder=15,
-                  label='Start' if idx == 0 else "")
+        # Mark first and last points differently
+        plt.scatter(row['vals_y'][0], row['vals_x'][0],
+                   color=colors[idx % len(colors)],
+                   marker='o', s=100, edgecolor='black',
+                   linewidths=1.5, zorder=10,
+                   label=f'Start {row["segment_id"]}' if idx == 0 else "")
         
         plt.scatter(row['vals_y'][-1], row['vals_x'][-1],
-                  color=colors[idx % len(colors)],
-                  marker='s', s=120, edgecolor='black',
-                  linewidths=1.5, zorder=15,
-                  label='End' if idx == 0 else "")
+                   color=colors[idx % len(colors)],
+                   marker='s', s=100, edgecolor='black',
+                   linewidths=1.5, zorder=10,
+                   label=f'End {row["segment_id"]}' if idx == 0 else "")
 
     # Customize plot appearance
-    plt.title(f'Trajectory {traj_id}\n{len(segments_df)} segments | Grid: {cell_size}°',
+    plt.title(f'Trajectory Points: {traj_id}\n{len(segments_df)} segments | Grid: {cell_size}°',
              fontsize=15, pad=25, weight='bold')
     
     plt.xlabel('Longitude', fontsize=13, labelpad=10)
@@ -107,21 +107,20 @@ def visualize_trajectory(traj_id: str, cell_size: float = 0.001):
     plt.legend(by_label.values(), by_label.keys(),
               loc='upper right', framealpha=0.9)
     
-    # Grid and aspect ratio
+    # Set equal aspect and grid
     plt.grid(True, which='both', linestyle=':', alpha=0.5)
     ax.set_aspect('equal', adjustable='datalim')
     
     # Save and show
-    output_path = OUTPUT_DIR / f'trajectory_{traj_id}_grid_{cell_size}.png'
+    output_path = OUTPUT_DIR / f'points_{traj_id}_grid_{cell_size}.png'
     plt.savefig(output_path, dpi=200, bbox_inches='tight', facecolor='white')
     print(f"Visualization saved to: {output_path}")
     plt.show()
 
-
 def main():
     traj_id = input("Enter trajectory ID to visualize: ").strip()
     cell_size = float(input("Enter grid cell size (in degrees, e.g. 0.001): ") or 0.001)
-    visualize_trajectory(traj_id, cell_size)
+    visualize_points(traj_id, cell_size)
 
 if __name__ == "__main__":
     main()

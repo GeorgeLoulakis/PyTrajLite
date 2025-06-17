@@ -1,1 +1,2 @@
-from .segmenter import segment_trajectory_by_fixed_size
+#from .segmenter import segment_trajectory_by_fixed_size
+from .segmenter import segment_trajectory_by_grid, segment_trajectory_by_fixed_size
