@@ -13,7 +13,7 @@ from src.fileio import save_segments_to_parquet, save_trajectories_to_parquet, l
 from src.models.grid import Grid
 from src.segmentation import segment_trajectory_by_fixed_size, segment_trajectory_by_grid
 from src.utils import display_menu, pause_and_clear
-from src.queries import bbox_query, compare_all_formats
+from src.queries import run_bbox_evaluation , compare_all_formats
 
 
 def create_parquet_from_raw():
@@ -102,9 +102,9 @@ def create_parquet_from_raw():
     pause_and_clear()
 
 
-def run_bbox_query():
+def run_bbox_eval():
     """Handle menu option 2: Run a Bounding Box spatial query on the Parquet data."""
-    bbox_query()
+    run_bbox_evaluation()
     pause_and_clear()
 
 
@@ -128,7 +128,7 @@ if __name__ == "__main__":
             create_parquet_from_raw()
 
         elif choice == "2":
-            run_bbox_query()
+            run_bbox_eval()
 
         elif choice == "3":
             run_compare_all_formats()

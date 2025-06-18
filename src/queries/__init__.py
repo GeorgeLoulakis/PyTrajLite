@@ -1,2 +1,2 @@
-from .bbox_query import bbox_query
+from .bbox_eval import run_bbox_evaluation
 from .compare_parquet_vs_csv import compare_all_formats
