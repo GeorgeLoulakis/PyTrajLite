@@ -1,4 +1,7 @@
 from src.models import TrajectorySegment
+from src.models import TrajectorySegment, Grid
+from typing import List
+
 
 def segment_trajectory_by_fixed_size(traj, max_segment_size=100):
     """
@@ -43,9 +46,6 @@ def segment_trajectory_by_fixed_size(traj, max_segment_size=100):
         i += max_segment_size
 
     return segments
-
-from src.models import TrajectorySegment, Grid
-from typing import List
 
 def segment_trajectory_by_grid(traj, grid: Grid):
     """
