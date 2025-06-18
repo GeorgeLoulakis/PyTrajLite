@@ -8,7 +8,7 @@ from matplotlib.collections import PatchCollection
 
 # Path configuration
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-PARQUET_PATH = PROJECT_ROOT / "data" / "processed" / "trajectory_segments.parquet"
+PARQUET_PATH = PROJECT_ROOT / "data" / "processed" / "trajectory_segments_grid.parquet"
 OUTPUT_DIR = PROJECT_ROOT / "results" / "visualizations"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
