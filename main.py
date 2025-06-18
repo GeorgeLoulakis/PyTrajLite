@@ -13,7 +13,7 @@ from src.fileio import save_segments_to_parquet, save_trajectories_to_parquet, l
 from src.models.grid import Grid
 from src.segmentation import segment_trajectory_by_fixed_size, segment_trajectory_by_grid
 from src.utils import display_menu, pause_and_clear
-from src.queries import bbox_query, compare_parquet_vs_csv
+from src.queries import bbox_query, compare_all_formats
 
 
 def create_parquet_from_raw():
@@ -108,9 +108,9 @@ def run_bbox_query():
     pause_and_clear()
 
 
-def run_compare_parquet_vs_csv():
+def run_compare_all_formats():
     """Handle menu option 3: Compare size and read performance of Parquet vs CSV files."""
-    compare_parquet_vs_csv()
+    compare_all_formats()
     pause_and_clear()
 
 
@@ -131,7 +131,7 @@ if __name__ == "__main__":
             run_bbox_query()
 
         elif choice == "3":
-            run_compare_parquet_vs_csv()
+            run_compare_all_formats()
 
         else:
             print("Invalid option. Please enter 0, 1, 2, or 3.")

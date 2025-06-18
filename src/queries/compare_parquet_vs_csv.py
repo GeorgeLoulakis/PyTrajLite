@@ -2,48 +2,70 @@ from pathlib import Path
 from time import time
 import pandas as pd
 
-
-def compare_parquet_vs_csv():
+def load_file_and_measure(path: Path, file_type: str):
     """
-    Compare size and load time between Parquet and CSV.
-    If CSV doesn't exist, generate it from trajectories.
+    Load a file (Parquet or CSV), measure load time and size.
+
+    Args:
+        path (Path): Path to the file.
+        file_type (str): 'parquet' or 'csv'.
+
+    Returns:
+        tuple: (number of rows, size in KB, load time in seconds)
     """
-    parquet_path = Path("data/processed/trajectories.parquet")
-    csv_path = Path("data/processed/trajectories.csv")
-
-    if not parquet_path.exists():
-        print("Parquet file not found. Please create it first using option 1.")
-        return
-
-    if csv_path.exists():
-        choice = input("CSV already exists. Use existing file? (y/n): ").strip().lower()
-        if choice == 'n':
-            csv_path.unlink()
-            print("Old CSV deleted. A new one will be generated.")
-        elif choice != 'y':
-            print("Invalid input. Aborting.")
-            return
-
-    # Load from Parquet
-    print("\nReading Parquet file...")
     start = time()
-    df_parquet = pd.read_parquet(parquet_path)
-    parquet_time = time() - start
-    parquet_size = parquet_path.stat().st_size / 1024  # KB
+    if file_type == "parquet":
+        df = pd.read_parquet(path)
+    else:
+        df = pd.read_csv(path)
+    elapsed = time() - start
+    size_kb = path.stat().st_size / 1024
+    return len(df), size_kb, elapsed
 
-    # Generate CSV if not exists
-    if not csv_path.exists():
-        print("Generating CSV from Parquet...")
-        df_parquet.to_csv(csv_path, index=False)
+def compare_all_formats():
+    """
+    Compare multiple file formats (CSV and Parquet variants) in terms of:
+    - row count
+    - file size (KB)
+    - load time (s)
+    - percentage size difference from the smallest file
+    """
+    base = Path("data/processed")
 
-    # Load from CSV
-    print("Reading CSV file...")
-    start = time()
-    df_csv = pd.read_csv(csv_path)
-    csv_time = time() - start
-    csv_size = csv_path.stat().st_size / 1024  # KB
+    files = {
+        "CSV": base / "trajectories.csv",
+        "Parquet (Base)": base / "trajectories.parquet",
+        "Parquet (Fixed Segments)": base / "trajectory_segments_fixed.parquet",
+        "Parquet (Grid Segments)": base / "trajectory_segments_grid.parquet",
+    }
 
-    # Print comparison
-    print("\n--- Comparison Result ---")
-    print(f"Parquet: {len(df_parquet)} rows, {parquet_size:.2f} KB, {parquet_time:.2f} sec")
-    print(f"CSV:     {len(df_csv)} rows, {csv_size:.2f} KB, {csv_time:.2f} sec")
+    results = []
+
+    print("\n--- Comparing All Formats ---\n")
+
+    # Load all available files and measure their size and load time
+    for label, path in files.items():
+        if not path.exists():
+            print(f"[!] File not found: {path.name}")
+            continue
+        ext = path.suffix.replace('.', '')  # Determine format type by file extension
+        rows, size_kb, load_time = load_file_and_measure(path, ext)
+        results.append({
+            "name": label,
+            "rows": rows,
+            "size_kb": size_kb,
+            "load_time_sec": load_time
+        })
+
+    # Identify the file with the smallest size for relative comparison
+    min_size = min(r["size_kb"] for r in results)
+
+    # Print formatted comparison table
+    print(f"{'Format':35} {'Rows':>8} {'Size (KB)':>12} {'Time (s)':>10} {'Difference from smallest (%)':>30}")
+    print("-" * 100)
+    for r in results:
+        diff = 100 * (r["size_kb"] - min_size) / min_size if min_size > 0 else 0
+        print(f"{r['name']:35} {r['rows']:8} {r['size_kb']:12.2f} {r['load_time_sec']:10.3f} {diff:30.1f}")
+
+if __name__ == "__main__":
+    compare_all_formats()

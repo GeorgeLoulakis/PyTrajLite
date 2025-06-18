@@ -6,7 +6,7 @@ def display_menu():
     print("=" * 40)
     print("1. Prepare data (create Parquet file if missing)")
     print("2. Run BBox Query")
-    print("3. Compare Parquet vs CSV (size and read time)")
+    print("3. Benchmark formats: CSV vs Parquet (Base, Fixed, Grid) — compare size & load time")
     print("0. Exit")
     print("=" * 40)
 
