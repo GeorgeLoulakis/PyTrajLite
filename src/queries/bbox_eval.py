@@ -10,7 +10,6 @@ def load_base_parquet(parquet_path: Path) -> pd.DataFrame:
     """
     return pd.read_parquet(parquet_path)
 
-
 def load_csv(csv_path: Path) -> pd.DataFrame:
     """
     Load the CSV file containing trajectory points and convert timestamp to datetime.
@@ -18,7 +17,6 @@ def load_csv(csv_path: Path) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     return df
-
 
 def load_segmented_parquet(path: Path) -> pd.DataFrame:
     """
@@ -33,7 +31,6 @@ def load_segmented_parquet(path: Path) -> pd.DataFrame:
             )
     return df
 
-
 def run_bbox_query_on_points(df: pd.DataFrame, bbox: Tuple[float, float, float, float]) -> pd.DataFrame:
     """
     Apply a bounding box filter on individual points.
@@ -44,7 +41,6 @@ def run_bbox_query_on_points(df: pd.DataFrame, bbox: Tuple[float, float, float, 
         (df['lon'] >= min_lon) & (df['lon'] <= max_lon)
     ]
 
-
 def run_bbox_query_on_segments(df: pd.DataFrame, bbox: Tuple[float, float, float, float]) -> pd.DataFrame:
     """
     Apply a bounding box filter on segment-level metadata (min/max coordinates).
@@ -54,13 +50,6 @@ def run_bbox_query_on_segments(df: pd.DataFrame, bbox: Tuple[float, float, float
         (df['max_x'] >= min_lat) & (df['min_x'] <= max_lat) &
         (df['max_y'] >= min_lon) & (df['min_y'] <= max_lon)
     ]
-
-
-from pathlib import Path
-from typing import Tuple
-from time import time
-import pandas as pd
-
 
 def evaluate_all_files(bbox: Tuple[float, float, float, float]):
     """
