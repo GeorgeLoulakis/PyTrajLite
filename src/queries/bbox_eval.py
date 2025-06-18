@@ -136,9 +136,9 @@ def run_bbox_evaluation():
     Entry point for running the BBox query with user-defined coordinates.
     """
     print("Enter bounding box coordinates:")
-    min_lat = float(input("  Min Latitude: "))
-    max_lat = float(input("  Max Latitude: "))
-    min_lon = float(input("  Min Longitude: "))
-    max_lon = float(input("  Max Longitude: "))
+    min_lat = float(input("  Min Latitude eg. 39.9840: "))
+    max_lat = float(input("  Max Latitude eg. 39.9850: "))
+    min_lon = float(input("  Min Longitude eg. 116.3160: "))
+    max_lon = float(input("  Max Longitude eg. 116.3185: "))
     bbox = (min_lat, max_lat, min_lon, max_lon)
     evaluate_all_files(bbox)
