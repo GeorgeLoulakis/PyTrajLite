@@ -616,13 +616,33 @@ def evaluate_all_files(bbox: Tuple[float, float, float, float]):
         except Exception as e:
             print(f"[{name}] Error during evaluation: {e}")
 
-    # Print a summary table
+    # Print a summary table by category
     print("\n--- Summary ---")
-    header = f"{'Format':<40} {'Matches':>10} {'Load (s)':>10} {'Query (s)':>12} {'Total (s)':>12} {'% Diff':>10}"
-    print(header)
-    print("-" * len(header))
-    for name, count, load_t, query_t, total_t, diff in summary:
-        print(f"{name:<40} {count:10} {load_t:10.3f} {query_t:12.3f} {total_t:12.3f} {diff:10.1f}")
+    df_summary = pd.DataFrame(summary, columns=["Format", "Matches", "Load (s)", "Query (s)", "Total (s)", "% Diff"])
+
+    def classify_category(format_name):
+        if "Base Parquet" in format_name:
+            return "Base Parquet"
+        elif "CSV" in format_name:
+            return "CSV"
+        elif "Fixed Segments" in format_name:
+            return "Fixed Segments"
+        elif "Grid Segments" in format_name:
+            return "Grid Segments"
+        else:
+            return "Other"
+
+    df_summary["Category"] = df_summary["Format"].apply(classify_category)
+    df_summary = df_summary.sort_values(by=["Category", "Total (s)"])
+
+    grouped = df_summary.groupby("Category")
+
+    for category, group in grouped:
+        print(f"\n[{category}]")
+        print(f"{'Format':<40} {'Matches':>10} {'Load (s)':>10} {'Query (s)':>12} {'Total (s)':>12} {'% Diff':>10}")
+        print("-" * 95)
+        for _, row in group.iterrows():
+            print(f"{row['Format']:<40} {int(row['Matches']):10} {row['Load (s)']:10.3f} {row['Query (s)']:12.3f} {row['Total (s)']:12.3f} {row['% Diff']:10.1f}")
 
 
 def run_bbox_evaluation():
