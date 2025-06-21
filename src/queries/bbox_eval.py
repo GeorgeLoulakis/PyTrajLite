@@ -5,7 +5,6 @@ import pyarrow.parquet as pq
 from pathlib import Path
 from typing import Tuple, Optional
 from time import time
-from numba import njit, prange
 
 
 
@@ -450,39 +449,6 @@ def run_bbox_query_on_segments_numpy_v2(
         )
     return pd.DataFrame(columns=df.columns)
 
-def run_bbox_query_with_numba(df: pd.DataFrame, bbox: Tuple[float, float, float, float]) -> pd.DataFrame:
-    """optimized bounding box query using Numba for parallel processing."""
-    if df.empty:
-        return df
-
-    min_lat, max_lat, min_lon, max_lon = bbox
-
-    df = df.copy()  # Avoid modifying original
-    # Ensure arrays are of NumPy type
-    df['vals_x'] = df['vals_x'].apply(lambda x: np.array(x, dtype=np.float32) if not isinstance(x, np.ndarray) else x)
-    df['vals_y'] = df['vals_y'].apply(lambda y: np.array(y, dtype=np.float32) if not isinstance(y, np.ndarray) else y)
-
-    x_arrays = np.array(df['vals_x'].values, dtype=object)
-    y_arrays = np.array(df['vals_y'].values, dtype=object)
-
-    mask = numba_bbox_filter(x_arrays, y_arrays, min_lat, max_lat, min_lon, max_lon)
-    return df[mask]
-
-#########################################################################################################################
-
-#@njit(parallel=True)
-def numba_bbox_filter(x_arrays, y_arrays, min_lat, max_lat, min_lon, max_lon):
-    """Parallelized bounding box filter using Numba."""
-    results = np.zeros(len(x_arrays), dtype=np.bool_)
-    for i in prange(len(x_arrays)):
-        results[i] = np.any(
-            (x_arrays[i] >= min_lat) & (x_arrays[i] <= max_lat) &
-            (y_arrays[i] >= min_lon) & (y_arrays[i] <= max_lon)
-        )
-    return results
-
-#########################################################################################################################
-
 
 
 
@@ -514,7 +480,6 @@ def evaluate_all_files(bbox: Tuple[float, float, float, float]):
         "Fixed Segments (Pushdown)": (lambda p: load_segmented_parquet_with_pushdown(p, bbox), run_bbox_query_on_segments_numpy2, seg_fixed_path),
         "Fixed Segments (Pushdown Optimized)": (lambda p: load_segmented_parquet_with_pushdown_optimized(p, bbox),run_bbox_query_on_segments_numpy2_optimized,seg_fixed_path),
         "Fixed Segments (Pushdown v2)": (lambda p: load_segmented_parquet_with_pushdown_optimized_v2(p, bbox),run_bbox_query_on_segments_numpy2_optimized_v2,seg_fixed_path),
-        "Fixed Segments (Numba MM)": (lambda p: load_segmented_parquet_mmap_pushdown(p, bbox),run_bbox_query_with_numba,seg_fixed_path),
 
         # Grid-based segments (3 versions)
         "Grid Segments (Default)": (load_segmented_parquet, run_bbox_query_on_segments, seg_grid_path),
@@ -525,7 +490,6 @@ def evaluate_all_files(bbox: Tuple[float, float, float, float]):
         "Grid Segments (Pushdown)": (lambda p: load_segmented_parquet_with_pushdown(p, bbox), run_bbox_query_on_segments_numpy2, seg_grid_path),
         "Grid Segments (Pushdown Optimized)": (lambda p: load_segmented_parquet_with_pushdown_optimized(p, bbox),run_bbox_query_on_segments_numpy2_optimized,seg_grid_path),
         "Grid Segments (Pushdown v2)": (lambda p: load_segmented_parquet_with_pushdown_optimized_v2(p, bbox),run_bbox_query_on_segments_numpy2_optimized_v2,seg_grid_path),
-        "Grid Segments (Numba MM)": (lambda p: load_segmented_parquet_mmap_pushdown(p, bbox),run_bbox_query_with_numba,seg_grid_path),
 
     }
 
