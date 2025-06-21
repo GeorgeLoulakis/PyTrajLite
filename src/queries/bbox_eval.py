@@ -1,8 +1,12 @@
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
+
 from pathlib import Path
 from typing import Tuple, Optional
 from time import time
+from numba import njit, prange
+
 
 
 def load_base_parquet(parquet_path: Path) -> pd.DataFrame:
@@ -190,6 +194,33 @@ def load_segmented_parquet_with_pushdown_optimized_v2(
     except Exception as e:
         print(f"[Pushdown Loader v2] Error loading {path.name}: {str(e)}")
         return pd.DataFrame()
+
+def load_segmented_parquet_mmap_pushdown(path: Path, bbox: Tuple[float, float, float, float]) -> pd.DataFrame:
+    """ Load a segmented Parquet file with memory mapping and predicate pushdown."""
+    min_lat, max_lat, min_lon, max_lon = bbox
+    
+    table = pq.read_table(
+        path,
+        columns=['vals_x', 'vals_y', 'min_x', 'max_x', 'min_y', 'max_y'],
+        filters=[
+            ("max_x", ">=", min_lat),
+            ("min_x", "<=", max_lat),
+            ("max_y", ">=", min_lon),
+            ("min_y", "<=", max_lon)
+        ],
+        memory_map=True
+    )
+    
+    df = table.to_pandas()
+    
+    # Convert string arrays to NumPy (only if necessary)
+    for col in ['vals_x', 'vals_y']:
+        if isinstance(df[col].iloc[0], str):
+            df[col] = df[col].str.strip('{}').apply(
+                lambda s: np.fromstring(s, sep=',', dtype=np.float32)
+            )
+    
+    return df
 
 def run_bbox_query_on_points(df: pd.DataFrame, bbox: Tuple[float, float, float, float]) -> pd.DataFrame:
     """
@@ -419,25 +450,8 @@ def run_bbox_query_on_segments_numpy_v2(
         )
     return pd.DataFrame(columns=df.columns)
 
-#########################################################################################################################
-
-
-from numba import njit, prange
-import pyarrow.parquet as pq
-
-#@njit(parallel=True)
-def numba_bbox_filter(x_arrays, y_arrays, min_lat, max_lat, min_lon, max_lon):
-    """Παράλληλο φιλτράρισμα με Numba"""
-    results = np.zeros(len(x_arrays), dtype=np.bool_)
-    for i in prange(len(x_arrays)):
-        results[i] = np.any(
-            (x_arrays[i] >= min_lat) & (x_arrays[i] <= max_lat) &
-            (y_arrays[i] >= min_lon) & (y_arrays[i] <= max_lon)
-        )
-    return results
-
-def run_bbox_query_numba_optimized(df: pd.DataFrame, bbox: Tuple[float, float, float, float]) -> pd.DataFrame:
-    """Βελτιστοποιημένο query με Numba (χωρίς απαιτήσεις για ίδιου μεγέθους arrays)"""
+def run_bbox_query_with_numba(df: pd.DataFrame, bbox: Tuple[float, float, float, float]) -> pd.DataFrame:
+    """optimized bounding box query using Numba for parallel processing."""
     if df.empty:
         return df
 
@@ -454,41 +468,18 @@ def run_bbox_query_numba_optimized(df: pd.DataFrame, bbox: Tuple[float, float, f
     mask = numba_bbox_filter(x_arrays, y_arrays, min_lat, max_lat, min_lon, max_lon)
     return df[mask]
 
+#########################################################################################################################
 
-def load_segmented_parquet_mmap(path: Path, bbox: Tuple[float, float, float, float]) -> pd.DataFrame:
-    """Φόρτωση με memory mapping και column pruning"""
-    min_lat, max_lat, min_lon, max_lon = bbox
-    
-    table = pq.read_table(
-        path,
-        columns=['vals_x', 'vals_y', 'min_x', 'max_x', 'min_y', 'max_y'],
-        filters=[
-            ("max_x", ">=", min_lat),
-            ("min_x", "<=", max_lat),
-            ("max_y", ">=", min_lon),
-            ("min_y", "<=", max_lon)
-        ],
-        memory_map=True
-    )
-    
-    df = table.to_pandas()
-    
-    # Convert string arrays to NumPy (αν χρειάζεται)
-    for col in ['vals_x', 'vals_y']:
-        if isinstance(df[col].iloc[0], str):
-            df[col] = df[col].str.strip('{}').apply(
-                lambda s: np.fromstring(s, sep=',', dtype=np.float32)
-            )
-    
-    return df
-
-
-
-
-
-
-
-
+#@njit(parallel=True)
+def numba_bbox_filter(x_arrays, y_arrays, min_lat, max_lat, min_lon, max_lon):
+    """Parallelized bounding box filter using Numba."""
+    results = np.zeros(len(x_arrays), dtype=np.bool_)
+    for i in prange(len(x_arrays)):
+        results[i] = np.any(
+            (x_arrays[i] >= min_lat) & (x_arrays[i] <= max_lat) &
+            (y_arrays[i] >= min_lon) & (y_arrays[i] <= max_lon)
+        )
+    return results
 
 #########################################################################################################################
 
@@ -517,53 +508,25 @@ def evaluate_all_files(bbox: Tuple[float, float, float, float]):
         # Fixed-size segments (3 versions)
         "Fixed Segments (Default)": (load_segmented_parquet, run_bbox_query_on_segments, seg_fixed_path),
         "Fixed Segments (NumPy)": (load_segmented_parquet, run_bbox_query_on_segments_numpy, seg_fixed_path),
-        "Fixed Segments (NumPy V2)": (load_segmented_parquet, run_bbox_query_on_segments_numpy2, seg_fixed_path),
+        "Fixed Segments (NumPy V2 Raw)": (load_segmented_parquet, run_bbox_query_on_segments_numpy2, seg_fixed_path),
+        "Fixed Segments (Numpy v2 Combined)": (load_segmented_parquet,run_bbox_query_on_segments_numpy_v2,seg_fixed_path),
         "Fixed Segments (Optimized)": (lambda p: p, run_bbox_query_on_segments_optimized, seg_fixed_path),
         "Fixed Segments (Pushdown)": (lambda p: load_segmented_parquet_with_pushdown(p, bbox), run_bbox_query_on_segments_numpy2, seg_fixed_path),
         "Fixed Segments (Pushdown Optimized)": (lambda p: load_segmented_parquet_with_pushdown_optimized(p, bbox),run_bbox_query_on_segments_numpy2_optimized,seg_fixed_path),
+        "Fixed Segments (Pushdown v2)": (lambda p: load_segmented_parquet_with_pushdown_optimized_v2(p, bbox),run_bbox_query_on_segments_numpy2_optimized_v2,seg_fixed_path),
+        "Fixed Segments (Numba MM)": (lambda p: load_segmented_parquet_mmap_pushdown(p, bbox),run_bbox_query_with_numba,seg_fixed_path),
 
         # Grid-based segments (3 versions)
         "Grid Segments (Default)": (load_segmented_parquet, run_bbox_query_on_segments, seg_grid_path),
         "Grid Segments (NumPy)": (load_segmented_parquet, run_bbox_query_on_segments_numpy, seg_grid_path),
-        "Grid Segments (NumPy V2)": (load_segmented_parquet, run_bbox_query_on_segments_numpy2, seg_grid_path),
+        "Grid Segments (NumPy V2 Raw)": (load_segmented_parquet, run_bbox_query_on_segments_numpy2, seg_grid_path),
+        "Grid Segments (Numpy v2 Combined)": (load_segmented_parquet,run_bbox_query_on_segments_numpy_v2,seg_grid_path),
         "Grid Segments (Optimized)": (lambda p: p, run_bbox_query_on_segments_optimized, seg_grid_path),
         "Grid Segments (Pushdown)": (lambda p: load_segmented_parquet_with_pushdown(p, bbox), run_bbox_query_on_segments_numpy2, seg_grid_path),
         "Grid Segments (Pushdown Optimized)": (lambda p: load_segmented_parquet_with_pushdown_optimized(p, bbox),run_bbox_query_on_segments_numpy2_optimized,seg_grid_path),
+        "Grid Segments (Pushdown v2)": (lambda p: load_segmented_parquet_with_pushdown_optimized_v2(p, bbox),run_bbox_query_on_segments_numpy2_optimized_v2,seg_grid_path),
+        "Grid Segments (Numba MM)": (lambda p: load_segmented_parquet_mmap_pushdown(p, bbox),run_bbox_query_with_numba,seg_grid_path),
 
-        # Add new optimized versions
-        "Fixed Segments (Pushdown v2)": (
-            lambda p: load_segmented_parquet_with_pushdown_optimized_v2(p, bbox),
-            run_bbox_query_on_segments_numpy2_optimized_v2,
-            seg_fixed_path
-        ),
-        "Grid Segments (Pushdown v2)": (
-            lambda p: load_segmented_parquet_with_pushdown_optimized_v2(p, bbox),
-            run_bbox_query_on_segments_numpy2_optimized_v2,
-            seg_grid_path
-        ),
-        "Fixed Segments (Numpy v2)": (
-            load_segmented_parquet,
-            run_bbox_query_on_segments_numpy_v2,
-            seg_fixed_path
-        ),
-        "Grid Segments (Numpy v2)": (
-            load_segmented_parquet,
-            run_bbox_query_on_segments_numpy_v2,
-            seg_grid_path
-        ),
-
-        ############################## ... υπάρχον entries ...
-
-        "Fixed Segments (Numba Ultra)": (
-            lambda p: load_segmented_parquet_mmap(p, bbox),
-            run_bbox_query_numba_optimized,
-            seg_fixed_path
-        ),
-        "Grid Segments (Numba Ultra)": (
-            lambda p: load_segmented_parquet_mmap(p, bbox),
-            run_bbox_query_numba_optimized,
-            seg_grid_path
-        ),
     }
 
 
