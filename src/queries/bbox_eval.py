@@ -1,12 +1,13 @@
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
+import warnings
 
 from pathlib import Path
 from typing import Tuple, Optional
 from time import time
 
-
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 def load_base_parquet(parquet_path: Path) -> pd.DataFrame:
     """
@@ -194,6 +195,150 @@ def load_segmented_parquet_with_pushdown_optimized_v2(
         print(f"[Pushdown Loader v2] Error loading {path.name}: {str(e)}")
         return pd.DataFrame()
 
+def load_segmented_parquet_with_pushdown_v3_np(
+    path: Path,
+    bbox: Tuple[float, float, float, float],
+    required_columns: Optional[list] = None
+) -> pd.DataFrame:
+    """
+    Optimized Pushdown V3 with fastest numpy string-to-array conversion
+    
+    Args:
+        path: Path to parquet file
+        bbox: Tuple of (min_lat, max_lat, min_lon, max_lon)
+        required_columns: List of columns to load (None for defaults)
+    
+    Returns:
+        Filtered DataFrame with converted arrays
+    """
+    min_lat, max_lat, min_lon, max_lon = bbox
+
+    # Default columns if not specified
+    if required_columns is None:
+        required_columns = ['segment_id', 'vals_x', 'vals_y', 
+                            'min_x', 'max_x', 'min_y', 'max_y']
+
+    # Bounding box filters for predicate pushdown
+    filters = [
+        ("max_x", ">=", min_lat),
+        ("min_x", "<=", max_lat),
+        ("max_y", ">=", min_lon),
+        ("min_y", "<=", max_lon)
+    ]
+
+    try:
+        # 1. Load with pushdown filtering and column pruning
+        df = pd.read_parquet(
+            path,
+            columns=required_columns,
+            filters=filters,
+            engine='pyarrow'
+        )
+
+        if df.empty:
+            return df
+
+        # 2. Ultra-fast numpy conversion
+        def str_to_np_array(s: str) -> np.ndarray:
+            """Inner function for fastest string-to-array conversion"""
+            return np.fromstring(s.strip('{}'), sep=',', dtype=np.float32)
+
+        # Apply to coordinate columns if they exist
+        for col in ['vals_x', 'vals_y']:
+            if col in df.columns and isinstance(df[col].iloc[0], str):
+                df[col] = df[col].apply(str_to_np_array)
+
+        return df
+
+    except Exception as e:
+        print(f"[Pushdown V3 NP] Error loading {path.name}: {str(e)}")
+        return pd.DataFrame()
+
+def memory_optimized_batch_query(df, bbox, batch_size=10000):
+    min_lat, max_lat, min_lon, max_lon = bbox
+    results = []
+    
+    # Use batching to reduce memory usage when processing large datasets
+    for batch in np.array_split(df, max(1, len(df)//batch_size)):
+        # Flatten the coordinate arrays across the current batch
+        all_x = np.concatenate(batch['vals_x'].values)
+        all_y = np.concatenate(batch['vals_y'].values)
+        # Get the length of each trajectory segment in the batch
+        lengths = batch['vals_x'].str.len().values
+        
+        # Perform a vectorized spatial filter to find all points inside the bounding box
+        mask = (
+            (all_x >= min_lat) & (all_x <= max_lat) &
+            (all_y >= min_lon) & (all_y <= max_lon)
+        )
+        
+        # Create a boolean mask to keep only the segments that contain at least one point inside the bounding box
+        result_mask = np.zeros(len(batch), dtype=bool)
+        pos = 0
+        for i, length in enumerate(lengths):
+            result_mask[i] = np.any(mask[pos:pos+length])
+            pos += length
+        
+        # Append the filtered segments to the results list
+        results.append(batch[result_mask])
+    # Concatenate and return the filtered results
+    return pd.concat(results) if results else df.iloc[:0]
+
+def optimized_combo_query(df, bbox, batch_size=50000):
+    # Unpack bounding box coordinates
+    min_lat, max_lat, min_lon, max_lon = bbox
+    results = []
+    
+    # Process the DataFrame in batches to reduce memory usage
+    for i in range(0, len(df), batch_size):
+        batch = df.iloc[i:i+batch_size]
+        
+        # Vectorized operations με direct array access
+        x_arrays = batch['vals_x'].values
+        y_arrays = batch['vals_y'].values
+        
+        batch_mask = np.zeros(len(batch), dtype=bool)
+        
+        for j in range(len(batch)):
+            x_vals = x_arrays[j]
+            y_vals = y_arrays[j]
+            
+            # Vectorized filtering
+            mask = (
+                (x_vals >= min_lat) & (x_vals <= max_lat) &
+                (y_vals >= min_lon) & (y_vals <= max_lon)
+            )
+            
+            batch_mask[j] = np.any(mask)
+        
+        # Append only matching segments to results
+        results.append(batch[batch_mask])
+
+    # Return the combined result
+    return pd.concat(results) if results else df.iloc[:0]
+
+def vectorized_bbox_query(df, bbox):
+    """Full vectorized approach without numba, used in (Vectorized)"""
+    if df.empty:
+        return df
+    
+    min_lat, max_lat, min_lon, max_lon = bbox
+    
+    # Explode all points
+    segments = df.explode(['vals_x', 'vals_y'])
+    x_vals = segments['vals_x'].astype(float)
+    y_vals = segments['vals_y'].astype(float)
+    
+    # Vectorized filtering
+    mask = (
+        (x_vals >= min_lat) & (x_vals <= max_lat) &
+        (y_vals >= min_lon) & (y_vals <= max_lon)
+    )
+    
+    # Group back to segments
+    valid_segments = segments[mask].index.unique()
+    return df.loc[valid_segments]
+
 def load_segmented_parquet_mmap_pushdown(path: Path, bbox: Tuple[float, float, float, float]) -> pd.DataFrame:
     """ Load a segmented Parquet file with memory mapping and predicate pushdown."""
     min_lat, max_lat, min_lon, max_lon = bbox
@@ -316,15 +461,23 @@ def run_bbox_query_on_segments_numpy2(df: pd.DataFrame, bbox: Tuple[float, float
 def run_bbox_query_on_segments_optimized(path: Path, bbox: Tuple[float, float, float, float]) -> pd.DataFrame:
     """
     Optimized BBox filtering on segment metadata:
-    - Loads only necessary columns (column pruning)
-    - Applies bounding box filtering on segment-level metadata
+    - Loads min/max and vals_x/y columns (refinement support)
+    - Converts stringified vals_x/y to NumPy if needed
+    - Returns filtered rows by min/max
     """
     min_lat, max_lat, min_lon, max_lon = bbox
 
-    # ⚡ Only load metadata columns
-    df = pd.read_parquet(path, columns=['min_x', 'max_x', 'min_y', 'max_y'])
+    # Load only the required columns for bounding box filtering
+    df = pd.read_parquet(path, columns=['min_x', 'max_x', 'min_y', 'max_y', 'vals_x', 'vals_y'])
 
-    # 🧠 Bounding box filtering on metadata only
+    # Convert stringified arrays to NumPy arrays if necessary
+    for col in ['vals_x', 'vals_y']:
+        if pd.api.types.is_object_dtype(df[col]) and isinstance(df[col].dropna().iloc[0], str):
+            df[col] = df[col].str.strip('{}').apply(
+                lambda s: np.fromstring(s, sep=',', dtype=np.float32)
+            )
+
+    # Coarse filtering based on segment bounding boxes (min/max)
     return df[
         (df['max_x'] >= min_lat) & (df['min_x'] <= max_lat) &
         (df['max_y'] >= min_lon) & (df['min_y'] <= max_lon)
@@ -449,6 +602,36 @@ def run_bbox_query_on_segments_numpy_v2(
         )
     return pd.DataFrame(columns=df.columns)
 
+def refine_bbox_candidates(df: pd.DataFrame, bbox: Tuple[float, float, float, float]) -> pd.DataFrame:
+    """
+    Refines segment-level BBox matches by checking internal points (vals_x, vals_y).
+    Returns only segments that contain at least one point inside the BBox.
+    """
+    if df.empty:
+        return df
+
+    min_lat, max_lat, min_lon, max_lon = bbox
+    refined = []
+
+    # Iterate through each candidate segment
+    for row in df.itertuples():
+        x_vals = row.vals_x
+        y_vals = row.vals_y
+        try:
+            # Check if any point falls inside the bounding box
+            mask = (
+                (x_vals >= min_lat) & (x_vals <= max_lat) &
+                (y_vals >= min_lon) & (y_vals <= max_lon)
+            )
+            if np.any(mask):
+                refined.append(row)
+        except Exception:
+            continue  # Skip rows with invalid or malformed data
+
+    # Return filtered DataFrame with matching segments
+    if refined:
+        return pd.DataFrame.from_records([r._asdict() for r in refined], columns=df.columns)
+    return pd.DataFrame(columns=df.columns)
 
 
 
@@ -471,7 +654,7 @@ def evaluate_all_files(bbox: Tuple[float, float, float, float]):
         "Base Parquet (Pushdown)": (lambda p: load_base_parquet_with_pushdown(p, bbox), run_bbox_query_on_points, base_parquet_path),
         "CSV File": (load_csv, run_bbox_query_on_points, csv_path),
 
-        # Fixed-size segments (3 versions)
+        # Fixed-size segments (11 versions)
         "Fixed Segments (Default)": (load_segmented_parquet, run_bbox_query_on_segments, seg_fixed_path),
         "Fixed Segments (NumPy)": (load_segmented_parquet, run_bbox_query_on_segments_numpy, seg_fixed_path),
         "Fixed Segments (NumPy V2 Raw)": (load_segmented_parquet, run_bbox_query_on_segments_numpy2, seg_fixed_path),
@@ -480,8 +663,13 @@ def evaluate_all_files(bbox: Tuple[float, float, float, float]):
         "Fixed Segments (Pushdown)": (lambda p: load_segmented_parquet_with_pushdown(p, bbox), run_bbox_query_on_segments_numpy2, seg_fixed_path),
         "Fixed Segments (Pushdown Optimized)": (lambda p: load_segmented_parquet_with_pushdown_optimized(p, bbox),run_bbox_query_on_segments_numpy2_optimized,seg_fixed_path),
         "Fixed Segments (Pushdown v2)": (lambda p: load_segmented_parquet_with_pushdown_optimized_v2(p, bbox),run_bbox_query_on_segments_numpy2_optimized_v2,seg_fixed_path),
+        "Fixed Segments (Pushdown v3 NP)": (lambda p: load_segmented_parquet_with_pushdown_v3_np(p, bbox), run_bbox_query_on_segments_numpy2_optimized_v2, seg_fixed_path),
+        "Fixed Segments (Vectorized)": (lambda p: load_segmented_parquet_with_pushdown_v3_np(p, bbox),lambda df, bbox: vectorized_bbox_query(df, bbox),seg_fixed_path),
+        "Fixed Segments (Memory Optimized Batch)": (lambda p: load_segmented_parquet_with_pushdown_v3_np(p, bbox),lambda df, bbox: memory_optimized_batch_query(df, bbox, batch_size=50000),seg_fixed_path),
 
-        # Grid-based segments (3 versions)
+
+
+        # Grid-based segments (11 versions)
         "Grid Segments (Default)": (load_segmented_parquet, run_bbox_query_on_segments, seg_grid_path),
         "Grid Segments (NumPy)": (load_segmented_parquet, run_bbox_query_on_segments_numpy, seg_grid_path),
         "Grid Segments (NumPy V2 Raw)": (load_segmented_parquet, run_bbox_query_on_segments_numpy2, seg_grid_path),
@@ -490,7 +678,9 @@ def evaluate_all_files(bbox: Tuple[float, float, float, float]):
         "Grid Segments (Pushdown)": (lambda p: load_segmented_parquet_with_pushdown(p, bbox), run_bbox_query_on_segments_numpy2, seg_grid_path),
         "Grid Segments (Pushdown Optimized)": (lambda p: load_segmented_parquet_with_pushdown_optimized(p, bbox),run_bbox_query_on_segments_numpy2_optimized,seg_grid_path),
         "Grid Segments (Pushdown v2)": (lambda p: load_segmented_parquet_with_pushdown_optimized_v2(p, bbox),run_bbox_query_on_segments_numpy2_optimized_v2,seg_grid_path),
-
+        "Grid Segments (Pushdown v3 NP)": (lambda p: load_segmented_parquet_with_pushdown_v3_np(p, bbox), run_bbox_query_on_segments_numpy2_optimized_v2, seg_grid_path),
+        "Grid Segments (Vectorized)": (lambda p: load_segmented_parquet_with_pushdown_v3_np(p, bbox),lambda df, bbox: vectorized_bbox_query(df, bbox),seg_grid_path),
+        "Grid Segments (Memory Optimized Batch)": (lambda p: load_segmented_parquet_with_pushdown_v3_np(p, bbox),lambda df, bbox: memory_optimized_batch_query(df, bbox, batch_size=50000),seg_grid_path)
     }
 
 
@@ -516,6 +706,18 @@ def evaluate_all_files(bbox: Tuple[float, float, float, float]):
             query_start = time()
             results = query_fn(df, bbox)
             query_time = time() - query_start
+
+            # Apply refinement only if MBR-only query (no NumPy-level check)
+            REFINABLE_FORMATS = {
+                "Fixed Segments (Default)",
+                "Fixed Segments (Optimized)",
+                "Grid Segments (Default)",
+                "Grid Segments (Optimized)"
+            }
+
+            if name in REFINABLE_FORMATS:
+                print(f"→ Refinement applied to: {name}")
+                results = refine_bbox_candidates(results, bbox)
 
             elapsed = load_time + query_time
 
