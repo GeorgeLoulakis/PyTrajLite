@@ -96,7 +96,7 @@ def generate_grid_segments(trajectories, grid_parquet_path: Path):
     print(f"\n{len(all_grid_segments)} grid-based segments saved to: {grid_parquet_path} in {duration:.2f} seconds.")
 
 def generate_geoparquet(base_parquet_path: Path, geoparquet_path: Path):
-    """Create and export a GeoParquet file by adding geometry to trajectory records."""
+    """Create and export a GeoParquet file using compression and row grouping."""
     try:
         import geopandas as gpd
         from shapely.geometry import Point
@@ -104,13 +104,21 @@ def generate_geoparquet(base_parquet_path: Path, geoparquet_path: Path):
         print("\n[GeoParquet] Creating GeoParquet from base trajectories.parquet...")
         df = pd.read_parquet(base_parquet_path)
 
+        # Create geometry column (Point)
         gdf = gpd.GeoDataFrame(
             df,
             geometry=[Point(lon, lat) for lon, lat in zip(df["lon"], df["lat"])],
             crs="EPSG:4326"
         )
 
-        gdf.to_parquet(geoparquet_path, index=False)
+        # Export with compression and row group size
+        gdf.to_parquet(
+            geoparquet_path,
+            index=False,
+            compression="snappy",
+            row_group_size=10000
+        )
+
         print(f"[GeoParquet] Saved to: {geoparquet_path}")
 
     except Exception as e:

@@ -9,18 +9,18 @@ def evaluate_geoparquet(path: str, bbox: Tuple[float, float, float, float]) -> N
     """
     print("\n--- GeoParquet Evaluation ---")
     print(f"Target file: {path}")
-    
+
     total_start = time()
 
-    # Step 1: Load file
-    print("Step 1: Loading GeoParquet file...")
+    # Step 1: Load file using duckdb filtering
+    print("Step 1: Loading GeoParquet file (filtered with DuckDB)...")
     start_load = time()
-    gdf = load_geoparquet(path)
+    gdf = load_geoparquet(path, bbox)
     load_time = time() - start_load
     print(f"File loaded in {load_time:.3f} seconds.")
 
-    # Step 2: Apply BBox query
-    print("Step 2: Executing bounding box query...")
+    # Step 2: Optional spatial post-filtering
+    print("Step 2: Executing bounding box query (fine filtering)...")
     start_query = time()
     results = run_bbox_query_geoparquet(gdf, bbox)
     query_time = time() - start_query
