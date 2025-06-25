@@ -15,6 +15,7 @@ from src.segmentation import segment_trajectory_by_fixed_size, segment_trajector
 from src.utils import display_menu, pause_and_clear
 from src.queries.bbox.evaluation import run_bbox_evaluation
 from src.queries.compare_parquet_vs_csv import compare_all_formats
+from src.queries.spatial_geoparquet import evaluate_geoparquet
 
 def create_parquet_from_raw():
     """
@@ -99,25 +100,67 @@ def create_parquet_from_raw():
     else:
         print(f"\nGrid-based segments already exist at: {grid_parquet_path}")
 
-    pause_and_clear()
+    # STEP 3: Create GeoParquet
+    geoparquet_path = Path("data/processed/trajectories_geoparquet.parquet")
 
+    # Check if the GeoParquet file already exists to avoid redundant computation
+    if not geoparquet_path.exists():
+        try:
+            import geopandas as gpd
+            from shapely.geometry import Point
+
+            print("\n[GeoParquet] Creating GeoParquet from base trajectories.parquet...")
+
+            # Load the original Parquet file containing latitude and longitude
+            df = pd.read_parquet(base_parquet_path)
+
+            # Create a GeoDataFrame by converting lat/lon to shapely Point geometries
+            gdf = gpd.GeoDataFrame(
+                df,
+                geometry=[Point(lon, lat) for lon, lat in zip(df["lon"], df["lat"])],
+                crs="EPSG:4326"  # Set the coordinate reference system to WGS84
+            )
+
+            # Save the resulting GeoDataFrame as a Parquet file
+            gdf.to_parquet(geoparquet_path, index=False)
+            print(f"[GeoParquet] Saved to: {geoparquet_path}")
+
+        except Exception as e:
+            print(f"[GeoParquet] Error during creation: {e}")
+    else:
+        print(f"[GeoParquet] GeoParquet already exists: {geoparquet_path}")
+
+
+    pause_and_clear()
 
 def run_bbox_eval():
     """Handle menu option 2: Run a Bounding Box spatial query on the Parquet data."""
     run_bbox_evaluation()
     pause_and_clear()
 
-
 def run_compare_all_formats():
     """Handle menu option 3: Compare size and read performance of Parquet vs CSV files."""
     compare_all_formats()
+    pause_and_clear()
+
+def run_geoparquet_eval():
+    """Handle menu option 4: Run a BBox query on a GeoParquet file."""
+    print("Enter bounding box coordinates for GeoParquet:")
+    min_lat = float(input("  Min Latitude: "))
+    max_lat = float(input("  Max Latitude: "))
+    min_lon = float(input("  Min Longitude: "))
+    max_lon = float(input("  Max Longitude: "))
+    bbox = (min_lat, max_lat, min_lon, max_lon)
+
+    path = "data/processed/trajectories_geoparquet.parquet"  # ή όποιο GeoParquet έχεις
+    evaluate_geoparquet(path, bbox)
     pause_and_clear()
 
 
 if __name__ == "__main__":
     while True:
         display_menu()
-        choice = input("Enter your choice (0-3): ")
+        choice = input("Enter your choice (0-4): ")
 
         if choice == "0":
             print("Exiting PyTrajLite.")
@@ -132,7 +175,10 @@ if __name__ == "__main__":
 
         elif choice == "3":
             run_compare_all_formats()
+        
+        elif choice == "4":
+            run_geoparquet_eval()
 
         else:
-            print("Invalid option. Please enter 0, 1, 2, or 3.")
+            print("Invalid option. Please enter 0, 1, 2, 3 or 4.")
             pause_and_clear()
