@@ -45,3 +45,18 @@ def evaluate_geoparquet(path: str, bbox: Tuple[float, float, float, float]) -> N
         print(f"Results saved to: {output_path}")
     else:
         print("Results were not saved.")
+
+def run_geoparquet_interactive():
+    """
+    Interactively ask for BBox coordinates and run the GeoParquet evaluation.
+    Intended to be called from the main interface.
+    """
+    print("Enter bounding box coordinates for GeoParquet:")
+    min_lat = float(input("  Min Latitude eg. 39.9840: "))
+    max_lat = float(input("  Max Latitude eg. 39.9850: "))
+    min_lon = float(input("  Min Longitude eg. 116.3160: "))
+    max_lon = float(input("  Max Longitude eg. 116.3185: "))
+    bbox = (min_lat, max_lat, min_lon, max_lon)
+
+    path = "data/processed/trajectories_geoparquet.parquet"
+    evaluate_geoparquet(path, bbox)
