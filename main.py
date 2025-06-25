@@ -13,8 +13,8 @@ from src.fileio import save_segments_to_parquet, save_trajectories_to_parquet, l
 from src.models.grid import Grid
 from src.segmentation import segment_trajectory_by_fixed_size, segment_trajectory_by_grid
 from src.utils import display_menu, pause_and_clear
-from src.queries import run_bbox_evaluation , compare_all_formats
-
+from src.queries.bbox.evaluation import run_bbox_evaluation
+from src.queries.compare_parquet_vs_csv import compare_all_formats
 
 def create_parquet_from_raw():
     """
