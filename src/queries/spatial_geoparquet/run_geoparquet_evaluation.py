@@ -2,13 +2,15 @@ from pathlib import Path
 from time import time
 from typing import Tuple
 from .geoparquet_utils import load_geoparquet, run_bbox_query_geoparquet
+from pathlib import Path
 
 def evaluate_geoparquet(path: str, bbox: Tuple[float, float, float, float]) -> None:
     """
     Run and evaluate a bounding box query on a GeoParquet file, with summary and timing information.
     """
+    filename = Path(path).name
     print("\n--- GeoParquet Evaluation ---")
-    print(f"Target file: {path}")
+    print(f"Target file: {filename}")
 
     total_start = time()
 
@@ -48,8 +50,7 @@ def evaluate_geoparquet(path: str, bbox: Tuple[float, float, float, float]) -> N
 
 def run_geoparquet_interactive():
     """
-    Interactively ask for BBox coordinates and run the GeoParquet evaluation.
-    Intended to be called from the main interface.
+    Interactively ask for BBox coordinates and run the GeoParquet evaluation on both files.
     """
     print("Enter bounding box coordinates for GeoParquet:")
     min_lat = float(input("  Min Latitude eg. 39.9840: "))
@@ -58,5 +59,13 @@ def run_geoparquet_interactive():
     max_lon = float(input("  Max Longitude eg. 116.3185: "))
     bbox = (min_lat, max_lat, min_lon, max_lon)
 
-    path = "data/processed/trajectories_geoparquet.parquet"
-    evaluate_geoparquet(path, bbox)
+    print("\n========================================")
+    print("Evaluating: Compressed GeoParquet (Snappy)")
+    evaluate_geoparquet("data/processed/trajectories_geoparquet_compressed_snappy.parquet", bbox)
+    
+    print("\n========================================")
+    print("Evaluating: Uncompressed GeoParquet")
+    evaluate_geoparquet("data/processed/trajectories_geoparquet_uncompressed.parquet", bbox)
+
+
+
