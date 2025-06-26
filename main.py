@@ -30,7 +30,7 @@ from src.utils import display_menu, pause_and_clear
 # Queries and format comparisons
 from src.queries.bbox.evaluation import run_bbox_evaluation
 from src.queries.compare_parquet_vs_csv import compare_all_formats
-from src.queries.spatial_geoparquet import evaluate_geoparquet,run_geoparquet_interactive
+from src.queries.spatial_geoparquet.run_bbox_geoparquet import evaluate_geoparquet, run_geoparquet_interactive
 
 # Trajectory Data Processing Functions
 
