@@ -1,3 +1,5 @@
 from .geoparquet_utils import load_geoparquet, run_bbox_query_geoparquet
 from .run_bbox_geoparquet import evaluate_geoparquet
 from .run_bbox_geoparquet import evaluate_geoparquet, run_geoparquet_interactive
+from .knn_geoparquet import run_knn_query_geoparquet
+from .run_knn_geoparquet import run_knn_interactive

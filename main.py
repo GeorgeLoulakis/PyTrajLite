@@ -31,6 +31,7 @@ from src.utils import display_menu, pause_and_clear
 from src.queries.bbox.evaluation import run_bbox_evaluation
 from src.queries.compare_parquet_vs_csv import compare_all_formats
 from src.queries.spatial_geoparquet.run_bbox_geoparquet import evaluate_geoparquet, run_geoparquet_interactive
+from src.queries.spatial_geoparquet.run_knn_geoparquet import run_knn_interactive
 
 # Trajectory Data Processing Functions
 
@@ -245,6 +246,8 @@ if __name__ == "__main__":
             run_compare_all_formats()
         elif choice == "4":
             run_geoparquet_interactive()
+        elif choice == "5":
+            run_knn_interactive()
         else:
             print("Invalid option. Please enter 0, 1, 2, 3 or 4.")
 
