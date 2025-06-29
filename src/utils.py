@@ -9,6 +9,7 @@ def display_menu():
     print("3. Benchmark formats: CSV vs Parquet (Base, Fixed, Grid) — compare size & load time")
     print("4. Run BBox Query on GeoParquet file")
     print("5. Run kNN Query on GeoParquet file")
+    print("6. Run kNN Query on Base/Fixed/Grid")
     print("0. Exit")
     print("=" * 40)
 

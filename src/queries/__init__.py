@@ -1,2 +1,3 @@
 from .compare_parquet_vs_csv import compare_all_formats
 from .bbox.evaluation import run_bbox_evaluation
+from .knn import run_knn_general_interactive

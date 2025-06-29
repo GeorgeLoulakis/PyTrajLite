@@ -2,8 +2,8 @@ from .knn_geoparquet import run_knn_query_geoparquet
 
 def run_knn_interactive():
     print("Enter coordinates for reference point:")
-    lat = float(input("  Latitude: "))
-    lon = float(input("  Longitude: "))
+    lat = float(input("  Latitude eg. 39.9800: "))
+    lon = float(input("  Longitude eg. 116.3200: "))
     k = int(input("  Number of nearest points (k): "))
 
     results = run_knn_query_geoparquet("data/processed/trajectories_geoparquet_compressed_snappy.parquet", (lat, lon), k)

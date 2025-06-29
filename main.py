@@ -1,7 +1,7 @@
-'''
+"""
 Main entry point for PyTrajLite
 Handles user options, loads data, and manages Parquet and CSV generation.
-'''
+"""
 
 from pathlib import Path
 from time import time
@@ -11,6 +11,7 @@ import pandas as pd
 # Core imports for trajectory parsing and saving
 from src.raw_input_loader import parse_plt_file
 from src.fileio import (
+    save_knn_friendly_segments,
     save_segments_to_parquet,
     save_trajectories_to_parquet,
     load_trajectories_from_parquet,
@@ -28,13 +29,21 @@ from src.segmentation import (
 from src.utils import display_menu, pause_and_clear
 
 # Queries and format comparisons
-from src.queries.bbox.evaluation import run_bbox_evaluation
-from src.queries.compare_parquet_vs_csv import compare_all_formats
-from src.queries.spatial_geoparquet.run_bbox_geoparquet import evaluate_geoparquet, run_geoparquet_interactive
-from src.queries.spatial_geoparquet.run_knn_geoparquet import run_knn_interactive
+from src.queries import (
+    compare_all_formats,
+    run_bbox_evaluation,
+    run_knn_general_interactive,
+)
+from src.queries.spatial_geoparquet import (
+    run_geoparquet_interactive,
+    run_knn_interactive,
+)
+
+# Queries for kNN on Parquet files (Base/Fixed/Grid)
+from src.queries.knn import run_knn_general_interactive
+
 
 # Trajectory Data Processing Functions
-
 def generate_base_parquet(base_parquet_path: Path, user_dirs) -> list:
     """Load and convert raw .plt files into a base Parquet file."""
     print("\nBase Parquet file not found. Creating from raw PLT data...\n")
@@ -45,7 +54,6 @@ def generate_base_parquet(base_parquet_path: Path, user_dirs) -> list:
     for i, user_dir in enumerate(user_dirs, start=1):
         percent = (i / total_dirs) * 100
         print(f"\r[{percent:5.1f}%] Loading {user_dir.name}...", end="")
-
         for file in (user_dir / "Trajectory").glob("*.plt"):
             traj = parse_plt_file(file)
             if len(traj) > 0:
@@ -56,9 +64,15 @@ def generate_base_parquet(base_parquet_path: Path, user_dirs) -> list:
         pause_and_clear()
         return []
 
+    print("\nSaving base trajectories to Parquet...")
+    save_start = time()
     save_trajectories_to_parquet(trajectories, base_parquet_path)
-    duration = time() - start_time
-    print(f"\nBase Parquet file created in {duration:.2f} seconds.")
+    save_duration = time() - save_start
+    total_duration = time() - start_time
+
+    print(f"Base trajectories saved to: {base_parquet_path}")
+    print(f"Save time: {save_duration:.2f} seconds.")
+    print(f"Total duration: {total_duration:.2f} seconds.")
     return trajectories
 
 def generate_fixed_segments(trajectories, fixed_parquet_path: Path):
@@ -79,8 +93,8 @@ def generate_fixed_segments(trajectories, fixed_parquet_path: Path):
     start_save_time = time()
     save_segments_to_parquet(all_fixed_segments, fixed_parquet_path)
     save_duration = time() - start_save_time
-
     total_duration = seg_duration + save_duration
+
     print(f"{len(all_fixed_segments)} fixed-size segments saved to: {fixed_parquet_path}")
     print(f"Segmentation time: {seg_duration:.2f} seconds.")
     print(f"Save time: {save_duration:.2f} seconds.")
@@ -105,8 +119,8 @@ def generate_grid_segments(trajectories, grid_parquet_path: Path):
     start_save_time = time()
     save_segments_to_parquet(all_grid_segments, grid_parquet_path)
     save_duration = time() - start_save_time
-
     total_duration = seg_duration + save_duration
+
     print(f"{len(all_grid_segments)} grid-based segments saved to: {grid_parquet_path}")
     print(f"Segmentation time: {seg_duration:.2f} seconds.")
     print(f"Save time: {save_duration:.2f} seconds.")
@@ -127,7 +141,7 @@ def generate_geoparquet_versions(base_parquet_path: Path):
         print(f"Loaded DataFrame with {len(df):,} rows.")
 
         if "traj_id" in df.columns:
-            num_trajs = df['traj_id'].nunique()
+            num_trajs = df["traj_id"].nunique()
             print(f"Found {num_trajs:,} unique trajectories.")
 
         # 1. Δημιουργία γεωμετρίας με μέτρηση χρόνου
@@ -146,7 +160,9 @@ def generate_geoparquet_versions(base_parquet_path: Path):
         gdf = gpd.GeoDataFrame(df, geometry=geometry, crs="EPSG:4326")
 
         # 2. Αποθήκευση uncompressed
-        uncompressed_path = Path("data/processed/trajectories_geoparquet_uncompressed.parquet")
+        uncompressed_path = Path(
+            "data/processed/trajectories_geoparquet_uncompressed.parquet"
+        )
         start_uncompressed = time()
         gdf.to_parquet(uncompressed_path, index=False)
         uncompressed_duration = time() - start_uncompressed
@@ -154,13 +170,12 @@ def generate_geoparquet_versions(base_parquet_path: Path):
         print(f"Save time (uncompressed): {uncompressed_duration:.2f} seconds.")
 
         # 3. Αποθήκευση compressed
-        compressed_path = Path("data/processed/trajectories_geoparquet_compressed_snappy.parquet")
+        compressed_path = Path(
+            "data/processed/trajectories_geoparquet_compressed_snappy.parquet"
+        )
         start_compressed = time()
         gdf.to_parquet(
-            compressed_path,
-            index=False,
-            compression="snappy",
-            row_group_size=10000
+            compressed_path, index=False, compression="snappy", row_group_size=10000
         )
         compressed_duration = time() - start_compressed
         print(f"[GeoParquet] Saved compressed (snappy) to: {compressed_path}")
@@ -173,8 +188,60 @@ def generate_geoparquet_versions(base_parquet_path: Path):
     except Exception as e:
         print(f"[GeoParquet] Error during creation: {e}")
 
-# Menu Option 1: Generate all required Parquet files
+def generate_fixed_segments_with_centroids(trajectories, fixed_parquet_path: Path, fixed_knn_path: Path):
+    print("\nGenerating fixed-size segments with centroid support...")
+    all_fixed_segments = []
+    total = len(trajectories)
 
+    start_time = time()
+    for i, traj in enumerate(trajectories, start=1):
+        percent = (i / total) * 100
+        print(f"\r[{percent:5.1f}%] Segmenting (fixed+centroid) {traj.traj_id}...", end="")
+        segments = segment_trajectory_by_fixed_size(traj, max_segment_size=100)
+        all_fixed_segments.extend(segments)
+    seg_duration = time() - start_time
+
+    print("\nSaving fixed-size segments to original Parquet...")
+    save_segments_to_parquet(all_fixed_segments, fixed_parquet_path)
+
+    print("Saving centroid-enhanced version for kNN queries...")
+    save_start = time()
+    save_knn_friendly_segments(fixed_parquet_path, fixed_knn_path)
+    save_duration = time() - save_start
+
+    print(f"kNN-ready fixed segments saved to: {fixed_knn_path}")
+    print(f"Segmentation time: {seg_duration:.2f} seconds.")
+    print(f"Save time: {save_duration:.2f} seconds.")
+    print(f"Total time: {seg_duration + save_duration:.2f} seconds.")
+
+def generate_grid_segments_with_centroids(trajectories, grid_parquet_path: Path, grid_knn_path: Path):
+    print("\nGenerating grid-based segments with centroid support...")
+    grid = Grid.from_trajectories(trajectories, cell_size=0.001)
+    all_grid_segments = []
+    total = len(trajectories)
+
+    start_time = time()
+    for i, traj in enumerate(trajectories, start=1):
+        percent = (i / total) * 100
+        print(f"\r[{percent:5.1f}%] Segmenting (grid+centroid) {traj.traj_id}...", end="")
+        segments = segment_trajectory_by_grid(traj, grid)
+        all_grid_segments.extend(segments)
+    seg_duration = time() - start_time
+
+    print("\nSaving grid-based segments to original Parquet...")
+    save_segments_to_parquet(all_grid_segments, grid_parquet_path)
+
+    print("Saving centroid-enhanced version for kNN queries...")
+    save_start = time()
+    save_knn_friendly_segments(grid_parquet_path, grid_knn_path)
+    save_duration = time() - save_start
+
+    print(f"kNN-ready grid segments saved to: {grid_knn_path}")
+    print(f"Segmentation time: {seg_duration:.2f} seconds.")
+    print(f"Save time: {save_duration:.2f} seconds.")
+    print(f"Total time: {seg_duration + save_duration:.2f} seconds.")
+
+# Menu Option 1: Generate all required Parquet files
 def create_parquet_from_raw():
     """Main workflow for creating all necessary Parquet and GeoParquet files."""
     base_parquet_path = Path("data/processed/trajectories.parquet")
@@ -193,19 +260,32 @@ def create_parquet_from_raw():
         return
 
     fixed_parquet_path = Path("data/processed/trajectory_segments_fixed.parquet")
+    fixed_knn_path = Path("data/processed/trajectory_segments_fixed_knn.parquet")
     grid_parquet_path = Path("data/processed/trajectory_segments_grid.parquet")
+    grid_knn_path = Path("data/processed/trajectory_segments_grid_knn.parquet")
+    geoparquet_path = Path("data/processed/trajectories_geoparquet.parquet")
+
 
     if not fixed_parquet_path.exists():
         generate_fixed_segments(trajectories, fixed_parquet_path)
     else:
         print(f"\nFixed-size segments already exist at: {fixed_parquet_path}")
 
+    if not fixed_knn_path.exists():
+        generate_fixed_segments_with_centroids(trajectories, fixed_parquet_path, fixed_knn_path)
+    else:
+        print(f"\nFixed-knn-size segments already exist at: {fixed_knn_path}")
+
     if not grid_parquet_path.exists():
         generate_grid_segments(trajectories, grid_parquet_path)
     else:
         print(f"\nGrid-based segments already exist at: {grid_parquet_path}")
 
-    geoparquet_path = Path("data/processed/trajectories_geoparquet.parquet")
+    if not grid_knn_path.exists():
+        generate_grid_segments_with_centroids(trajectories, grid_parquet_path, grid_knn_path)
+    else:
+        print(f"\nGrid-knn-size segments already exist at: {grid_knn_path}")
+
     if not geoparquet_path.exists():
         generate_geoparquet_versions(base_parquet_path)
     else:
@@ -214,25 +294,22 @@ def create_parquet_from_raw():
     pause_and_clear()
 
 # Menu Option 2: BBox Query on regular Parquet files
-
 def run_bbox_eval():
     """Run BBox evaluation on all segment formats and show results."""
     run_bbox_evaluation()
     pause_and_clear()
 
 # Menu Option 3: Benchmark CSV vs Parquet
-
 def run_compare_all_formats():
     """Compare CSV and Parquet formats in terms of I/O and size."""
     compare_all_formats()
     pause_and_clear()
 
 # Application Entry Point
-
 if __name__ == "__main__":
     while True:
         display_menu()
-        choice = input("Enter your choice (0-4): ")
+        choice = input("Enter your choice (0-6): ")
 
         if choice == "0":
             print("Exiting PyTrajLite.")
@@ -248,6 +325,8 @@ if __name__ == "__main__":
             run_geoparquet_interactive()
         elif choice == "5":
             run_knn_interactive()
+        elif choice == "6":
+            run_knn_general_interactive()
         else:
             print("Invalid option. Please enter 0, 1, 2, 3 or 4.")
 
