@@ -42,7 +42,7 @@ def optimized_combo_query(df, bbox, batch_size=50000):
     for i in range(0, len(df), batch_size):
         batch = df.iloc[i:i+batch_size]
         
-        # Vectorized operations με direct array access
+        # Vectorized operations with direct array access
         x_arrays = batch['vals_x'].values
         y_arrays = batch['vals_y'].values
         

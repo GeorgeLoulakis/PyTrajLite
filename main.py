@@ -144,7 +144,7 @@ def generate_geoparquet_versions(base_parquet_path: Path):
             num_trajs = df["traj_id"].nunique()
             print(f"Found {num_trajs:,} unique trajectories.")
 
-        # 1. Δημιουργία γεωμετρίας με μέτρηση χρόνου
+        # 1. Geometry creation with timing
         print("Creating geometry column...")
         start_geom = time()
         total_rows = len(df)
@@ -159,7 +159,7 @@ def generate_geoparquet_versions(base_parquet_path: Path):
         print("\nCreating GeoDataFrame...")
         gdf = gpd.GeoDataFrame(df, geometry=geometry, crs="EPSG:4326")
 
-        # 2. Αποθήκευση uncompressed
+        # 2. Save uncompressed version
         uncompressed_path = Path(
             "data/processed/trajectories_geoparquet_uncompressed.parquet"
         )
@@ -169,7 +169,7 @@ def generate_geoparquet_versions(base_parquet_path: Path):
         print(f"[GeoParquet] Saved uncompressed to: {uncompressed_path}")
         print(f"Save time (uncompressed): {uncompressed_duration:.2f} seconds.")
 
-        # 3. Αποθήκευση compressed
+        # 3. Save compressed version
         compressed_path = Path(
             "data/processed/trajectories_geoparquet_compressed_snappy.parquet"
         )
@@ -181,7 +181,7 @@ def generate_geoparquet_versions(base_parquet_path: Path):
         print(f"[GeoParquet] Saved compressed (snappy) to: {compressed_path}")
         print(f"Save time (compressed): {compressed_duration:.2f} seconds.")
 
-        # 4. Συνολικός χρόνος
+        # 4. Total time
         total_time = geom_duration + uncompressed_duration + compressed_duration
         print(f"Total time for GeoParquet generation: {total_time:.2f} seconds.")
 
