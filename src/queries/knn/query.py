@@ -20,5 +20,5 @@ def run_knn_query_on_segments(df: pd.DataFrame, point: tuple, k: int, lat_col: s
     distances = np.sqrt((df[lat_col] - point[0]) ** 2 + (df[lon_col] - point[1]) ** 2)
     df = df.copy()
     df["distance"] = distances
-    return df.nsmallest(k, "distance")[["traj_id", lat_col, lon_col, "distance"]]
+    return df.nsmallest(k, "distance")[["entity_id", lat_col, lon_col, "distance"]]
 
