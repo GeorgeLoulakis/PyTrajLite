@@ -62,10 +62,22 @@ def evaluate_all_files(bbox: Tuple[float, float, float, float]):
 
     reference_count = None
     summary = []
-    output_dir = Path("data/results")
-    output_dir.mkdir(parents=True, exist_ok=True)
 
-    for name, (load_fn, query_fn, path) in files.items():
+    # Find next bbox_try# folder
+    base_results_dir = Path("results")
+    base_results_dir.mkdir(exist_ok=True)
+    existing = sorted([d for d in base_results_dir.glob("bbox_try*") if d.is_dir()])
+    if existing:
+        last_index = max(int(d.name.replace("bbox_try", "")) for d in existing if d.name.replace("bbox_try", "").isdigit())
+        run_index = last_index + 1
+    else:
+        run_index = 1
+
+    output_dir = base_results_dir / f"bbox_try{run_index}"
+    output_dir.mkdir(parents=True)
+    print(f"\nSaving results to folder: {output_dir}")
+    total_methods = len(files)
+    for i, (name, (load_fn, query_fn, path)) in enumerate(files.items()):
         if not path.exists():
             print(f"[{name}] File not found: {path}")
             continue
@@ -84,7 +96,9 @@ def evaluate_all_files(bbox: Tuple[float, float, float, float]):
                 "Fixed Segments (Default)",
                 "Fixed Segments (Optimized)",
                 "Grid Segments (Default)",
-                "Grid Segments (Optimized)"
+                "Grid Segments (Optimized)",
+                "Fixed Segments (Pushdown)",  # ΝΕΟ
+                "Grid Segments (Pushdown)"   # ΝΕΟ
             }
 
             if name in REFINABLE_FORMATS:
@@ -109,6 +123,8 @@ def evaluate_all_files(bbox: Tuple[float, float, float, float]):
             if save_results and not results.empty:
                 safe_name = name.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("-", "_")
                 output_path = output_dir / f"{safe_name}_bbox_results.{save_format}"
+                progress_percent = (i + 1) / total_methods * 100
+                print(f"Saving: {output_path.name} ({i + 1}/{total_methods} — {progress_percent:.1f}%)")
                 if save_format == "csv":
                     results.to_csv(output_path, index=False)
                 elif save_format == "json":
