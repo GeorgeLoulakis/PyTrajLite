@@ -70,10 +70,47 @@ def generate_base_parquet(base_parquet_path: Path, user_dirs) -> list:
     save_duration = time() - save_start
     total_duration = time() - start_time
 
+    save_trajectories_to_csv(trajectories, Path("data/processed/trajectories.csv"))
+
     print(f"Base trajectories saved to: {base_parquet_path}")
     print(f"Save time: {save_duration:.2f} seconds.")
     print(f"Total duration: {total_duration:.2f} seconds.")
     return trajectories
+
+def save_trajectories_to_csv(trajectories: list, output_path: Path) -> None:
+    """
+    Save a list of Trajectory objects to a CSV file.
+    Shows progress and timing.
+    """
+    print("\nPreparing DataFrame for CSV saving...")
+    start_prep = time()
+    rows = []
+    total = len(trajectories)
+
+    for i, traj in enumerate(trajectories, start=1):
+        percent = (i / total) * 100
+        print(f"\r[{percent:5.1f}%] Processing trajectory {traj.traj_id}...", end="")
+        for p in traj.points:
+            rows.append({
+                "traj_id": traj.traj_id,
+                "lat": p.lat,
+                "lon": p.lon,
+                "altitude": p.altitude,
+                "timestamp": p.timestamp
+            })
+    prep_duration = time() - start_prep
+
+    print("\nSaving CSV file...")
+    start_save = time()
+    df = pd.DataFrame(rows)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_path, index=False)
+    save_duration = time() - start_save
+
+    print(f"CSV file saved to: {output_path}")
+    print(f"CSV preparation time: {prep_duration:.2f} seconds.")
+    print(f"CSV save time: {save_duration:.2f} seconds.")
+    print(f"Total time: {prep_duration + save_duration:.2f} seconds.")
 
 def generate_fixed_segments(trajectories, fixed_parquet_path: Path):
     """Perform fixed-size segmentation on trajectories and save as Parquet, with timing information."""
