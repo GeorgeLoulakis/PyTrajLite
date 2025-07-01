@@ -282,6 +282,7 @@ def generate_grid_segments_with_centroids(trajectories, grid_parquet_path: Path,
 def create_parquet_from_raw():
     """Main workflow for creating all necessary Parquet and GeoParquet files."""
     base_parquet_path = Path("data/processed/trajectories.parquet")
+    csv_path = Path("data/processed/trajectories.csv")
     data_path = Path("data/raw/Data")
     user_dirs = sorted([p for p in data_path.iterdir() if p.is_dir()])
 
@@ -292,6 +293,13 @@ def create_parquet_from_raw():
         print("\nBase Parquet file already exists.")
         print(f"File: {base_parquet_path}")
         trajectories = load_trajectories_from_parquet(base_parquet_path)
+
+        # if CSV does not exist, generate it from loaded trajectories
+        if not csv_path.exists():
+            print("[CSV] File not found — generating from loaded trajectories.")
+            save_trajectories_to_csv(trajectories, csv_path)
+        else:
+            print("[CSV] File already exists.")
 
     if not trajectories:
         return
