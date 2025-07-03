@@ -91,14 +91,10 @@ def evaluate_all_files(bbox: Tuple[float, float, float, float]):
 
             if reference_count is None:
                 reference_count = match_count
-                percent_diff = 0.0
-            else:
-                percent_diff = (
-                    0.0 if reference_count == 0 else 100 * (match_count - reference_count) / reference_count
-                )
-            print(f"[{name}] {match_count} matches in {elapsed:.3f} sec ({percent_diff:+.1f}% diff)")
+            
+            print(f"[{name}] {match_count} matches in {elapsed:.3f} sec")
 
-            summary.append((name, match_count, load_time, query_time, elapsed, percent_diff))
+            summary.append((name, match_count, load_time, query_time, elapsed))
 
             if save_results and not results.empty:
                 safe_name = name.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("-", "_")
@@ -138,7 +134,7 @@ def evaluate_all_files(bbox: Tuple[float, float, float, float]):
 
     # Print a summary table by category
     print("\n--- Summary ---")
-    df_summary = pd.DataFrame(summary, columns=["Format", "Points", "Load (s)", "Query (s)", "Total (s)", "% Diff"])
+    df_summary = pd.DataFrame(summary, columns=["Format", "Points", "Load (s)", "Query (s)", "Total (s)"])
 
     def classify_category(format_name):
         if "Base Parquet" in format_name:
@@ -159,10 +155,10 @@ def evaluate_all_files(bbox: Tuple[float, float, float, float]):
 
     for category, group in grouped:
         print(f"\n[{category}]")
-        print(f"{'Format':<40} {'Matches':>10} {'Load (s)':>10} {'Query (s)':>12} {'Total (s)':>12} {'% Diff':>10}")
+        print(f"{'Format':<40} {'Matches':>10} {'Load (s)':>10} {'Query (s)':>12} {'Total (s)':>12}")
         print("-" * 95)
         for _, row in group.iterrows():
-            print(f"{row['Format']:<40} {int(row['Points']):10} {row['Load (s)']:10.3f} {row['Query (s)']:12.3f} {row['Total (s)']:12.3f} {row['% Diff']:10.1f}")
+            print(f"{row['Format']:<40} {int(row['Points']):10} {row['Load (s)']:10.3f} {row['Query (s)']:12.3f} {row['Total (s)']:12.3f}")
 
 def run_bbox_evaluation():
     """
