@@ -14,7 +14,7 @@ def load_base_parquet(parquet_path: Path) -> pd.DataFrame:
     return pd.read_parquet(parquet_path)
 
 def load_base_parquet_bbox_only(parquet_path: Path) -> pd.DataFrame:
-    return pd.read_parquet(parquet_path, columns=["lat", "lon"])
+    return pd.read_parquet(parquet_path, columns=["traj_id", "lat", "lon"])
 
 def load_base_parquet_with_pushdown(parquet_path: Path, bbox: Tuple[float, float, float, float]) -> pd.DataFrame:
     """
@@ -49,19 +49,6 @@ def load_csv(csv_path: Path) -> pd.DataFrame:
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     return df
 
-def load_segmented_parquet(path: Path) -> pd.DataFrame:
-    """
-    Load a segmented Parquet file (fixed or grid) and convert stringified array columns to Python lists,
-    only if necessary.
-    """
-    df = pd.read_parquet(path)
-    for col in ['vals_x', 'vals_y', 'vals_t']:
-        if pd.api.types.is_object_dtype(df[col]) and isinstance(df[col].dropna().iloc[0], str):
-            df[col] = df[col].str.strip('{}').str.split(',').apply(
-                lambda lst: [float(i) if 'T' not in i else i.strip("'") for i in lst]
-            )
-    return df
-
 def load_segmented_parquet_with_pushdown(
     path: Path,
     bbox: Tuple[float, float, float, float],
@@ -87,7 +74,7 @@ def load_segmented_parquet_with_pushdown(
         ("min_y", "<=", max_lon),
     ]
 
-    columns = ["vals_x", "vals_y", "vals_t", "min_x", "max_x", "min_y", "max_y"]
+    columns = ["entity_id", "segment_id", "vals_x", "vals_y", "vals_t", "min_x", "max_x", "min_y", "max_y"]
 
     try:
         df = pd.read_parquet(
@@ -125,7 +112,7 @@ def load_segmented_parquet_with_pushdown_optimized(
     min_lat, max_lat, min_lon, max_lon = bbox
 
     if required_columns is None:
-        required_columns = ['segment_id', 'vals_x', 'vals_y', 'min_x', 'max_x', 'min_y', 'max_y']
+        required_columns = ['entity_id', 'segment_id', 'vals_x', 'vals_y', 'min_x', 'max_x', 'min_y', 'max_y']
 
     filters = [
         ("max_x", ">=", min_lat),
@@ -163,7 +150,7 @@ def load_segmented_parquet_with_pushdown_optimized_v2(
     min_lat, max_lat, min_lon, max_lon = bbox
 
     if required_columns is None:
-        required_columns = ['segment_id', 'vals_x', 'vals_y', 'min_x', 'max_x', 'min_y', 'max_y']
+        required_columns = ['entity_id', 'segment_id', 'vals_x', 'vals_y', 'min_x', 'max_x', 'min_y', 'max_y']
 
     filters = [
         ("max_x", ">=", min_lat),
@@ -213,7 +200,7 @@ def load_segmented_parquet_with_pushdown_v3_np(
 
     # Default columns if not specified
     if required_columns is None:
-        required_columns = ['segment_id', 'vals_x', 'vals_y', 
+        required_columns = ['entity_id', 'segment_id', 'vals_x', 'vals_y', 
                             'min_x', 'max_x', 'min_y', 'max_y']
 
     # Bounding box filters for predicate pushdown
@@ -252,29 +239,46 @@ def load_segmented_parquet_with_pushdown_v3_np(
         print(f"[Pushdown V3 NP] Error loading {path.name}: {str(e)}")
         return pd.DataFrame()
 
-def load_segmented_parquet_mmap_pushdown(path: Path, bbox: Tuple[float, float, float, float]) -> pd.DataFrame:
-    """ Load a segmented Parquet file with memory mapping and predicate pushdown."""
-    min_lat, max_lat, min_lon, max_lon = bbox
+
+# not used in the current implementation
+
+# def load_segmented_parquet(path: Path) -> pd.DataFrame:
+#     """
+#     Load a segmented Parquet file (fixed or grid) and convert stringified array columns to Python lists,
+#     only if necessary.
+#     """
+#     df = pd.read_parquet(path)
+#     for col in ['vals_x', 'vals_y', 'vals_t']:
+#         if pd.api.types.is_object_dtype(df[col]) and isinstance(df[col].dropna().iloc[0], str):
+#             df[col] = df[col].str.strip('{}').str.split(',').apply(
+#                 lambda lst: [float(i) if 'T' not in i else i.strip("'") for i in lst]
+#             )
+#     return df
+
+# def load_segmented_parquet_mmap_pushdown(path: Path, bbox: Tuple[float, float, float, float]) -> pd.DataFrame:
+#     """ Load a segmented Parquet file with memory mapping and predicate pushdown."""
+#     min_lat, max_lat, min_lon, max_lon = bbox
     
-    table = pq.read_table(
-        path,
-        columns=['vals_x', 'vals_y', 'min_x', 'max_x', 'min_y', 'max_y'],
-        filters=[
-            ("max_x", ">=", min_lat),
-            ("min_x", "<=", max_lat),
-            ("max_y", ">=", min_lon),
-            ("min_y", "<=", max_lon)
-        ],
-        memory_map=True
-    )
+#     table = pq.read_table(
+#         path,
+#         columns=['vals_x', 'vals_y', 'min_x', 'max_x', 'min_y', 'max_y'],
+#         filters=[
+#             ("max_x", ">=", min_lat),
+#             ("min_x", "<=", max_lat),
+#             ("max_y", ">=", min_lon),
+#             ("min_y", "<=", max_lon)
+#         ],
+#         memory_map=True
+#     )
     
-    df = table.to_pandas()
+#     df = table.to_pandas()
     
-    # Convert string arrays to NumPy (only if necessary)
-    for col in ['vals_x', 'vals_y']:
-        if isinstance(df[col].iloc[0], str):
-            df[col] = df[col].str.strip('{}').apply(
-                lambda s: np.fromstring(s, sep=',', dtype=np.float32)
-            )
+#     # Convert string arrays to NumPy (only if necessary)
+#     for col in ['vals_x', 'vals_y']:
+#         if isinstance(df[col].iloc[0], str):
+#             df[col] = df[col].str.strip('{}').apply(
+#                 lambda s: np.fromstring(s, sep=',', dtype=np.float32)
+#             )
     
-    return df
+#     return df
+

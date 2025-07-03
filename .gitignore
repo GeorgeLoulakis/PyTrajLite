@@ -23,3 +23,9 @@ data/raw/Data/*
 data/processed/*
 
 data/results/*
+
+# Ignore results folder
+results/
+
+# Ignore helper scripts
+src/queries/bbox/helpers/
