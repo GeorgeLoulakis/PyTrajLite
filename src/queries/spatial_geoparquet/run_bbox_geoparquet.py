@@ -31,7 +31,7 @@ def evaluate_geoparquet(path: str, bbox: Tuple[float, float, float, float]) -> N
     total_time = time() - total_start
 
     # Step 3: Output summary
-    print("\n--- Summary ---")
+    print("\n--- Summary ---\n")
     print(f"{'Metric':<25} {'Value'}")
     print("-" * 40)
     print(f"{'Number of matches:':<25} {len(results)}")
