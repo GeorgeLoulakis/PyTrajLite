@@ -363,15 +363,15 @@ if __name__ == "__main__":
         elif choice == "1":
             create_parquet_from_raw()
         elif choice == "2":
-            run_bbox_eval()
-        elif choice == "3":
             run_compare_all_formats()
+        elif choice == "3":
+            run_bbox_eval()
         elif choice == "4":
             run_geoparquet_interactive()
         elif choice == "5":
-            run_knn_interactive()
-        elif choice == "6":
             run_knn_general_interactive()
+        elif choice == "6":
+            run_knn_interactive()
         else:
             print("Invalid option. Please enter 0, 1, 2, 3 or 4.")
 
