@@ -1,36 +1,49 @@
 import duckdb
+import pyarrow.parquet as pq
+import pandas as pd
 import geopandas as gpd
-from shapely.geometry import Point
+from shapely.geometry import Point, box
 from typing import Tuple
 
 def load_geoparquet(path: str, bbox: Tuple[float, float, float, float]) -> gpd.GeoDataFrame:
     """
-    Load filtered GeoParquet file using DuckDB and return a GeoDataFrame.
-    Only rows within the bounding box are loaded to speed up performance.
+    Load only the points within the bounding box directly from the GeoParquet file
+    using DuckDB for efficient predicate pushdown. Returns a GeoDataFrame
+    containing all original columns plus geometry.
     """
-    min_lat, max_lat, min_lon, max_lon = bbox
+    # bbox is (min_lon, min_lat, max_lon, max_lat)
+    minx, miny, maxx, maxy = bbox
 
+    # DuckDB will scan only those row groups whose lat/lon ranges intersect
     query = f"""
-    SELECT lat, lon
-    FROM '{path}'
-    WHERE lat BETWEEN {min_lat} AND {max_lat}
-    AND lon BETWEEN {min_lon} AND {max_lon}
+    SELECT *
+    FROM read_parquet('{path}')
+    WHERE lon BETWEEN {minx} AND {maxx}
+        AND lat BETWEEN {miny} AND {maxy}
     """
 
+    # Execute and collect just the matching rows
     df = duckdb.query(query).to_df()
 
-    gdf = gpd.GeoDataFrame(
+    # Build geometry column and return a GeoDataFrame
+    return gpd.GeoDataFrame(
         df,
-        geometry=[Point(lon, lat) for lon, lat in zip(df["lon"], df["lat"])],
+        geometry=gpd.points_from_xy(df.lon, df.lat),
         crs="EPSG:4326"
     )
 
-    return gdf
+
 
 def run_bbox_query_geoparquet(gdf: gpd.GeoDataFrame, bbox: Tuple[float, float, float, float]) -> gpd.GeoDataFrame:
     """
-    Apply an additional bounding box filter on the GeoDataFrame.
-    (Optional if DuckDB already does it; acts as safety post-filter)
+    (Optional) Further refine with an exact within() check.
+    Keeps every attribute and returns only those rows whose geometry
+    truly lies inside the bounding box.
     """
-    min_lat, max_lat, min_lon, max_lon = bbox
-    return gdf.cx[min_lon:max_lon, min_lat:max_lat]
+    from shapely.geometry import box
+
+    # bbox is still (min_lon, min_lat, max_lon, max_lat)
+    minx, miny, maxx, maxy = bbox
+    bbox_poly = box(minx, miny, maxx, maxy)
+
+    return gdf[gdf.geometry.within(bbox_poly)]

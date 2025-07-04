@@ -7,6 +7,8 @@ from pathlib import Path
 from time import time
 from datetime import datetime
 import pandas as pd
+import geopandas as gpd
+from shapely.geometry import Point
 
 # Core imports for trajectory parsing and saving
 from src.raw_input_loader import parse_plt_file
@@ -170,57 +172,51 @@ def generate_geoparquet_versions(base_parquet_path: Path):
     - Compressed (snappy): trajectories_geoparquet_compressed_snappy.parquet
     """
     try:
-        import geopandas as gpd
-        from shapely.geometry import Point
-
         print("\n[GeoParquet] Loading base Parquet file...")
         df = pd.read_parquet(base_parquet_path)
-        print(f"Loaded DataFrame with {len(df):,} rows.")
+        print(f"Loaded DataFrame with {len(df):,} rows and columns: {list(df.columns)}")
 
-        if "traj_id" in df.columns:
-            num_trajs = df["traj_id"].nunique()
-            print(f"Found {num_trajs:,} unique trajectories.")
-
-        # 1. Geometry creation with timing
+        # Create geometry column (longitude, latitude)
         print("Creating geometry column...")
         start_geom = time()
+        
         total_rows = len(df)
         geometry = []
         for i, (lon, lat) in enumerate(zip(df["lon"], df["lat"]), start=1):
             geometry.append(Point(lon, lat))
+            
+            # show every 1%
             if i % (total_rows // 100) == 0 or i == total_rows:
                 percent = (i / total_rows) * 100
-                print(f"\r[ {percent:4.1f}%] Processing trajectory points...", end="")
+                print(f"\r[ {percent:5.1f}% ] Processing points...", end="")
+
+        df["geometry"] = geometry
         geom_duration = time() - start_geom
+        print(f"\nFinished geometry column in {geom_duration:.2f} seconds.")
 
-        print("\nCreating GeoDataFrame...")
-        gdf = gpd.GeoDataFrame(df, geometry=geometry, crs="EPSG:4326")
+        # Convert to GeoDataFrame
+        print("Creating GeoDataFrame...")
+        gdf = gpd.GeoDataFrame(df, geometry="geometry", crs="EPSG:4326")
 
-        # 2. Save uncompressed version
-        uncompressed_path = Path(
-            "data/processed/trajectories_geoparquet_uncompressed.parquet"
-        )
+        # Save uncompressed version
+        uncompressed_path = Path("data/processed/trajectories_geoparquet_uncompressed.parquet")
+        print("Saving uncompressed GeoParquet...")
         start_uncompressed = time()
         gdf.to_parquet(uncompressed_path, index=False)
         uncompressed_duration = time() - start_uncompressed
-        print(f"[GeoParquet] Saved uncompressed to: {uncompressed_path}")
-        print(f"Save time (uncompressed): {uncompressed_duration:.2f} seconds.")
+        print(f"Saved to: {uncompressed_path} (in {uncompressed_duration:.2f} sec)")
 
-        # 3. Save compressed version
-        compressed_path = Path(
-            "data/processed/trajectories_geoparquet_compressed_snappy.parquet"
-        )
+        # Save compressed version
+        compressed_path = Path("data/processed/trajectories_geoparquet_compressed_snappy.parquet")
+        print("Saving compressed GeoParquet (Snappy)...")
         start_compressed = time()
-        gdf.to_parquet(
-            compressed_path, index=False, compression="snappy", row_group_size=10000
-        )
+        gdf.to_parquet(compressed_path, index=False, compression="snappy", row_group_size=10000)
         compressed_duration = time() - start_compressed
-        print(f"[GeoParquet] Saved compressed (snappy) to: {compressed_path}")
-        print(f"Save time (compressed): {compressed_duration:.2f} seconds.")
+        print(f"Saved to: {compressed_path} (in {compressed_duration:.2f} sec)")
 
-        # 4. Total time
+        # Total time
         total_time = geom_duration + uncompressed_duration + compressed_duration
-        print(f"Total time for GeoParquet generation: {total_time:.2f} seconds.")
+        print(f"Total GeoParquet generation time: {total_time:.2f} seconds.")
 
     except Exception as e:
         print(f"[GeoParquet] Error during creation: {e}")
