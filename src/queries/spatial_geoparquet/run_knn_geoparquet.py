@@ -13,6 +13,9 @@ def run_knn_interactive():
     else:
         print("\n--- kNN Results ---")
         print(results[["traj_id", "lat", "lon", "distance"]])
-        save = input("Save to GeoJSON? (y/n): ").strip().lower()
-        if save == "y":
-            results.to_file("data/results/knn_results.geojson", driver="GeoJSON")
+        save = input("Save to CSV? (yes/no): ").strip().lower()
+        if save == "yes":
+            from time import strftime
+            filename = f"data/results/GeoParKnn_results_{strftime('%Y%m%d_%H%M%S')}.csv"
+            results.to_csv(filename, index=False)
+            print(f"Results saved to: {filename}")
