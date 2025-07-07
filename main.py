@@ -13,7 +13,7 @@ from shapely.geometry import Point
 # Core imports for trajectory parsing and saving
 from src.raw_input_loader import parse_plt_file
 from src.fileio import (
-    save_knn_friendly_segments,
+    build_knn_grid_index,
     save_segments_to_parquet,
     save_trajectories_to_parquet,
     load_trajectories_from_parquet,
@@ -221,59 +221,6 @@ def generate_geoparquet_versions(base_parquet_path: Path):
     except Exception as e:
         print(f"[GeoParquet] Error during creation: {e}")
 
-def generate_fixed_segments_with_centroids(trajectories, fixed_parquet_path: Path, fixed_knn_path: Path):
-    print("\nGenerating fixed-size segments with centroid support...")
-    all_fixed_segments = []
-    total = len(trajectories)
-
-    start_time = time()
-    for i, traj in enumerate(trajectories, start=1):
-        percent = (i / total) * 100
-        print(f"\r[{percent:5.1f}%] Segmenting (fixed+centroid) {traj.traj_id}...", end="")
-        segments = segment_trajectory_by_fixed_size(traj, max_segment_size=100)
-        all_fixed_segments.extend(segments)
-    seg_duration = time() - start_time
-
-    print("\nSaving fixed-size segments to original Parquet...")
-    save_segments_to_parquet(all_fixed_segments, fixed_parquet_path)
-
-    print("Saving centroid-enhanced version for kNN queries...")
-    save_start = time()
-    save_knn_friendly_segments(fixed_parquet_path, fixed_knn_path)
-    save_duration = time() - save_start
-
-    print(f"kNN-ready fixed segments saved to: {fixed_knn_path}")
-    print(f"Segmentation time: {seg_duration:.2f} seconds.")
-    print(f"Save time: {save_duration:.2f} seconds.")
-    print(f"Total time: {seg_duration + save_duration:.2f} seconds.")
-
-def generate_grid_segments_with_centroids(trajectories, grid_parquet_path: Path, grid_knn_path: Path):
-    print("\nGenerating grid-based segments with centroid support...")
-    grid = Grid.from_trajectories(trajectories, cell_size=0.001)
-    all_grid_segments = []
-    total = len(trajectories)
-
-    start_time = time()
-    for i, traj in enumerate(trajectories, start=1):
-        percent = (i / total) * 100
-        print(f"\r[{percent:5.1f}%] Segmenting (grid+centroid) {traj.traj_id}...", end="")
-        segments = segment_trajectory_by_grid(traj, grid)
-        all_grid_segments.extend(segments)
-    seg_duration = time() - start_time
-
-    print("\nSaving grid-based segments to original Parquet...")
-    save_segments_to_parquet(all_grid_segments, grid_parquet_path)
-
-    print("Saving centroid-enhanced version for kNN queries...")
-    save_start = time()
-    save_knn_friendly_segments(grid_parquet_path, grid_knn_path)
-    save_duration = time() - save_start
-
-    print(f"kNN-ready grid segments saved to: {grid_knn_path}")
-    print(f"Segmentation time: {seg_duration:.2f} seconds.")
-    print(f"Save time: {save_duration:.2f} seconds.")
-    print(f"Total time: {seg_duration + save_duration:.2f} seconds.")
-
 # Menu Option 1: Generate all required Parquet files
 def create_parquet_from_raw():
     """Main workflow for creating all necessary Parquet and GeoParquet files."""
@@ -301,7 +248,6 @@ def create_parquet_from_raw():
         return
 
     fixed_parquet_path = Path("data/processed/trajectory_segments_fixed.parquet")
-    fixed_knn_path = Path("data/processed/trajectory_segments_fixed_knn.parquet")
     grid_parquet_path = Path("data/processed/trajectory_segments_grid.parquet")
     grid_knn_path = Path("data/processed/trajectory_segments_grid_knn.parquet")
     geoparquet_path = Path("data/processed/trajectories_geoparquet.parquet")
@@ -312,18 +258,15 @@ def create_parquet_from_raw():
     else:
         print(f"\nFixed-size segments already exist at: {fixed_parquet_path}")
 
-    if not fixed_knn_path.exists():
-        generate_fixed_segments_with_centroids(trajectories, fixed_parquet_path, fixed_knn_path)
-    else:
-        print(f"\nFixed-knn-size segments already exist at: {fixed_knn_path}")
-
     if not grid_parquet_path.exists():
         generate_grid_segments(trajectories, grid_parquet_path)
     else:
         print(f"\nGrid-based segments already exist at: {grid_parquet_path}")
 
     if not grid_knn_path.exists():
-        generate_grid_segments_with_centroids(trajectories, grid_parquet_path, grid_knn_path)
+        print("\nCreating kNN-ready grid segments (grid_cell index)…")
+        build_knn_grid_index(grid_parquet_path, grid_knn_path)
+        print(f"kNN-ready grid segments saved to: {grid_knn_path}")
     else:
         print(f"\nGrid-knn-size segments already exist at: {grid_knn_path}")
 

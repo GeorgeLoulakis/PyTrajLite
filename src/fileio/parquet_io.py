@@ -1,6 +1,6 @@
 import pandas as pd
 from pathlib import Path
-from src.models import Point, Trajectory
+from ..models import Point, Trajectory
 
 def save_trajectories_to_parquet(trajectories, output_path: Path):
     """
@@ -48,25 +48,3 @@ def load_trajectories_from_parquet(parquet_path: Path):
 
     print(f"\nFinished loading {len(trajectories)} trajectories.")
     return trajectories
-    
-def save_knn_friendly_segments(input_path: Path, output_path: Path):
-    """
-    Load a segment Parquet file (fixed/grid), compute centroid fields,
-    and save to new file for use in kNN queries.
-    """
-    import pandas as pd
-
-    df = pd.read_parquet(input_path)
-
-    if "min_y" not in df.columns or "max_y" not in df.columns:
-        print(f"Cannot compute centroid: min_y/max_y not found in {input_path}")
-        return
-    if "min_x" not in df.columns or "max_x" not in df.columns:
-        print(f"Cannot compute centroid: min_x/max_x not found in {input_path}")
-        return
-
-    df["centroid_lat"] = (df["min_y"] + df["max_y"]) / 2
-    df["centroid_lon"] = (df["min_x"] + df["max_x"]) / 2
-
-    df.to_parquet(output_path, index=False)
-    print(f"Saved kNN-ready segments to: {output_path}")
