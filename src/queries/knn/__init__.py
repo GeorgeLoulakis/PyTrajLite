@@ -1,2 +1,2 @@
-from .query import run_knn_query_on_parquet
+from .query import run_knn_query_on_parquet, run_knn_query_on_fixed_segments_vectorized
 from .interactive import run_knn_general_interactive

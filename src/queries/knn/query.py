@@ -2,7 +2,8 @@ from pathlib import Path
 from typing import Tuple, Optional
 import pandas as pd
 import numpy as np
-from time import time
+import duckdb
+import time
 
 from src.models.grid import Grid
 
@@ -31,13 +32,13 @@ def run_knn_query(
     df: pd.DataFrame, point: Tuple[float, float], k: int, lat_col="lat", lon_col="lon"
 ):
     ref_lat, ref_lon = point
-    start = time()
+    start = time.time()
     df = df.copy()
     df["distance"] = haversine_vectorized(
         ref_lat, ref_lon, df[lat_col].values, df[lon_col].values
     )
     result = df.nsmallest(k, "distance")[["distance"]]
-    duration = time() - start
+    duration = time.time() - start
     return duration, result
 
 # --- kNN on base parquet of raw points ---
@@ -177,3 +178,72 @@ def run_knn_query_on_segments(
     )
 
     return result[["traj_id", "lat", "lon", "distance"]]
+
+def haversine_distance(lat1, lon1, lat2, lon2):
+    R = 6371000  # Earth radius in meters
+    phi1, phi2 = np.radians(lat1), np.radians(lat2)
+    delta_phi = np.radians(lat2 - lat1)
+    delta_lambda = np.radians(lon2 - lon1)
+
+    a = np.sin(delta_phi / 2) ** 2 + \
+        np.cos(phi1) * np.cos(phi2) * np.sin(delta_lambda / 2) ** 2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+
+    return R * c
+
+
+def run_knn_query_on_fixed_segments_vectorized(
+    parquet_path: Path,
+    query_point: Tuple[float, float],
+    k: int,
+    top_n_centroids: int = 300
+) -> pd.DataFrame:
+    """
+    Perform optimized kNN search over fixed segments stored in Parquet using:
+    - Bounding box I/O filtering (interpreting x=lat, y=lon)
+    - Centroid-based pre-filtering
+    - Fine-grained kNN with Haversine
+    """
+    ref_lat, ref_lon = query_point
+    start = time.time()
+
+    # --- Step 1: BBox Filtering (corrected for x=lat, y=lon) ---
+    query = f"""
+    SELECT entity_id, vals_x, vals_y,
+           min_x AS min_lat, max_x AS max_lat,
+           min_y AS min_lon, max_y AS max_lon,
+           centroid_x AS centroid_lat, centroid_y AS centroid_lon
+    FROM read_parquet('{parquet_path}')
+    WHERE min_x <= {ref_lat} AND max_x >= {ref_lat}
+      AND min_y <= {ref_lon} AND max_y >= {ref_lon}
+    """
+    df = duckdb.sql(query).to_df()
+    print(f"\nSegments after BBox I/O filter: {len(df)}")
+
+    # --- Step 2: Centroid Prefiltering ---
+    if {"centroid_lat", "centroid_lon"}.issubset(df.columns):
+        dx = df["centroid_lon"] - ref_lon
+        dy = df["centroid_lat"] - ref_lat
+        df["centroid_dist"] = np.sqrt(dx**2 + dy**2)
+        df = df.nsmallest(top_n_centroids, "centroid_dist")
+        print(f"Segments after centroid prefilter: {len(df)}")
+
+    if df.empty:
+        return pd.DataFrame(columns=["traj_id", "lat", "lon", "distance"])
+
+    # --- Step 3: Fine-grained kNN over raw points (x=lat, y=lon) ---
+    results = []
+    for row in df.itertuples():
+        for lat, lon in zip(row.vals_x, row.vals_y):  # x=lat, y=lon
+            dist = haversine_distance(ref_lat, ref_lon, lat, lon)
+            results.append((row.entity_id, lat, lon, dist))
+
+    results.sort(key=lambda r: r[3])
+    top_k = results[:k]
+
+    df_result = pd.DataFrame(results, columns=["traj_id", "lat", "lon", "distance"])
+    #df_result = df_result.drop_duplicates(subset=["lat", "lon"])
+    df_result = df_result.sort_values("distance").head(k).reset_index(drop=True)
+    elapsed = time.time() - start
+    print(f"kNN query (fixed+vectorized) executed in {elapsed:.3f} seconds.")
+    return df_result

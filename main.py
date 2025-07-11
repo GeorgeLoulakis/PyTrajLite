@@ -17,6 +17,7 @@ from src.fileio import (
     save_segments_to_parquet,
     save_trajectories_to_parquet,
     load_trajectories_from_parquet,
+    build_knn_fixed_index,
     load_segments_from_parquet,
 )
 
@@ -248,6 +249,7 @@ def create_parquet_from_raw():
         return
 
     fixed_parquet_path = Path("data/processed/trajectory_segments_fixed.parquet")
+    fixed_knn_path = Path("data/processed/trajectory_segments_fixed_knn.parquet")
     grid_parquet_path = Path("data/processed/trajectory_segments_grid.parquet")
     grid_knn_path = Path("data/processed/trajectory_segments_grid_knn.parquet")
     geoparquet_path = Path("data/processed/trajectories_geoparquet.parquet")
@@ -257,6 +259,13 @@ def create_parquet_from_raw():
         generate_fixed_segments(trajectories, fixed_parquet_path)
     else:
         print(f"\nFixed-size segments already exist at: {fixed_parquet_path}")
+
+    if not fixed_knn_path.exists():
+        print("\nCreating kNN-ready fixed segments (centroid + bbox)…")
+        build_knn_fixed_index(fixed_parquet_path, fixed_knn_path)
+        print(f"kNN-ready fixed segments saved to: {fixed_knn_path}")
+    else:
+        print(f"\nFixed-knn-size segments already exist at: {fixed_knn_path}")
 
     if not grid_parquet_path.exists():
         generate_grid_segments(trajectories, grid_parquet_path)

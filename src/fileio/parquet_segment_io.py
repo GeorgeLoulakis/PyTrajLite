@@ -13,7 +13,6 @@ def save_segments_to_parquet(segments: list[TrajectorySegment], output_path: Pat
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(output_path, index=False)
 
-
 def load_segments_from_parquet(parquet_path: Path) -> list[TrajectorySegment]:
     """
     Load TrajectorySegment records from a Parquet file.
@@ -76,5 +75,32 @@ def build_knn_grid_index(
     )
 
     # 6. Αποθήκευση στο target αρχείο
+    target_parquet.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(target_parquet, index=False)
+
+def build_knn_fixed_index(
+    source_parquet: Path,
+    target_parquet: Path
+) -> None:
+    """
+    Creates a kNN-ready file for fixed segments with additional fields:  
+        - min_x, max_x, min_y, max_y: Bounding box coordinates  
+        - centroid_x, centroid_y: Geometric center (centroid) of the segment  
+    Used for spatial pre-filters in kNN queries.  
+    """
+    df = pd.read_parquet(source_parquet)
+
+    # Calculating bounding box
+    df["min_x"] = df["vals_x"].apply(min)
+    df["max_x"] = df["vals_x"].apply(max)
+    df["min_y"] = df["vals_y"].apply(min)
+    df["max_y"] = df["vals_y"].apply(max)
+
+    # Calculating centroid
+    df["centroid_x"] = df["vals_x"].apply(lambda x: sum(x) / len(x) if len(x) > 0 else None)
+    df["centroid_y"] = df["vals_y"].apply(lambda y: sum(y) / len(y) if len(y) > 0 else None)
+
+
+    # Saving the modified DataFrame to the target Parquet file
     target_parquet.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(target_parquet, index=False)

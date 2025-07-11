@@ -13,18 +13,21 @@ the original TrajParquet Java implementation.
 
 from pathlib import Path
 import pandas as pd
-from time import time
+import time
 
 from .query import (
     run_knn_query,
     run_knn_query_on_parquet,
     run_knn_query_on_segments,
+    run_knn_query_on_fixed_segments_vectorized,
 )
+
+import numpy as np
 
 
 def run_knn_general_interactive():
     base_path  = Path("data/processed/trajectories.parquet")
-    fixed_path = Path("data/processed/trajectory_segments_fixed.parquet")
+    fixed_path = Path("data/processed/trajectory_segments_fixed_knn.parquet")
     grid_path  = Path("data/processed/trajectory_segments_grid_knn.parquet")
 
     # --- 1) User input ---
@@ -42,17 +45,17 @@ def run_knn_general_interactive():
     results_dir.mkdir(parents=True, exist_ok=True)
 
     # --- 2) Base Parquet: load + query ---
-    t0 = time()
+    t0 = time.time()
     df_base = pd.read_parquet(base_path)
-    t_load_base = time() - t0
+    t_load_base = time.time() - t0
 
-    t0 = time()
+    t0 = time.time()
     _, tmp = run_knn_query(df_base, (lat, lon), k)
     base_results = tmp.copy()
     base_results["traj_id"] = df_base.loc[tmp.index, "traj_id"].values
     base_results["lat"]     = df_base.loc[tmp.index, "lat"].values
     base_results["lon"]     = df_base.loc[tmp.index, "lon"].values
-    t_query_base = time() - t0
+    t_query_base = time.time() - t0
 
     print(f"\n{'='*10} kNN Base Parquet {'='*10}")
     print(f"Load time: {t_load_base:.4f}s, Query time: {t_query_base:.4f}s")
@@ -62,18 +65,18 @@ def run_knn_general_interactive():
         print("No results found in Base Parquet.")
 
     # --- 3) Fixed Segments: load + query ---
-    t0 = time()
+    t0 = time.time()
     df_fixed = pd.read_parquet(fixed_path)
-    t_load_fixed = time() - t0
+    t_load_fixed = time.time() - t0
 
-    t0 = time()
-    fixed_results = run_knn_query_on_segments(
-        df_fixed, (lat, lon), k,
-        start_lat_col="min_x", start_lon_col="min_y",
-        end_lat_col="max_x",   end_lon_col="max_y",
-        grid_cell_col=None
+    t0 = time.time()
+    fixed_results = run_knn_query_on_fixed_segments_vectorized(
+        parquet_path=fixed_path,
+        query_point=(lat, lon),
+        k=k,
+        top_n_centroids=10000
     )
-    t_query_fixed = time() - t0
+    t_query_fixed = time.time() - t0
 
     print(f"\n{'='*10} kNN Fixed Segments {'='*10}")
     print(f"Load time: {t_load_fixed:.4f}s, Query time: {t_query_fixed:.4f}s")
@@ -83,7 +86,7 @@ def run_knn_general_interactive():
         print("No results found in Fixed Segments.")
 
     # --- 4) Grid Segments: load only needed cols + query ---
-    t0 = time()
+    t0 = time.time()
     df_grid = pd.read_parquet(
         grid_path,
         columns=[
@@ -97,9 +100,9 @@ def run_knn_general_interactive():
             "max_y"
         ]
     )
-    t_load_grid = time() - t0
+    t_load_grid = time.time() - t0
 
-    t0 = time()
+    t0 = time.time()
     grid_results = run_knn_query_on_segments(
         df_grid, (lat, lon), k,
         start_lat_col="min_x", start_lon_col="min_y",
@@ -107,7 +110,7 @@ def run_knn_general_interactive():
         grid_cell_col="grid_cell",
         cell_size=0.001, grid_ring=1
     )
-    t_query_grid = time() - t0
+    t_query_grid = time.time() - t0
 
     if not grid_results.empty:
         grid_results = grid_results.drop_duplicates(subset=["lat", "lon"] )
@@ -148,6 +151,50 @@ def run_knn_general_interactive():
         print(f"\nCSV files saved to: {results_dir}")
     else:
         print("\nSkipping result saving. No files created.")
+
+    # --- 7) Compare Fixed vs Base Results ---
+    def compare_results(df1, df2, label1="Base", label2="Fixed"):
+        from math import isclose
+
+        if df1.empty or df2.empty:
+            print(f"\nCannot compare {label1} and {label2}: one is empty.")
+            return
+
+        diffs = []
+        for i, (row1, row2) in enumerate(zip(df1.itertuples(), df2.itertuples()), 1):
+            dist = haversine_distance(row1.lat, row1.lon, row2.lat, row2.lon)
+            diffs.append({
+                "rank": i,
+                "traj_1": row1.traj_id,
+                "traj_2": row2.traj_id,
+                "lat_diff": abs(row1.lat - row2.lat),
+                "lon_diff": abs(row1.lon - row2.lon),
+                "distance_m": dist,
+                "match": "same" if dist < 0.5 else ("small dif" if dist < 1.0 else "big dif")
+            })
+
+        df_diff = pd.DataFrame(diffs)
+        print("\n" + "="*20 + f" {label2} vs {label1} Comparison " + "="*20)
+        print(df_diff.to_string(index=False, float_format="%.3f"))
+
+    compare_results(base_results, fixed_results, label1="Base", label2="Fixed")
+
+def haversine_distance(lat1, lon1, lat2, lon2):
+    """
+    Compute the great-circle distance (in meters) between two points
+    on the Earth using the Haversine formula.
+    """
+    R = 6371000  # Earth radius in meters
+    phi1, phi2 = np.radians(lat1), np.radians(lat2)
+    delta_phi = np.radians(lat2 - lat1)
+    delta_lambda = np.radians(lon2 - lon1)
+
+    a = np.sin(delta_phi / 2) ** 2 + \
+        np.cos(phi1) * np.cos(phi2) * np.sin(delta_lambda / 2) ** 2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+
+    return R * c
+
 
 
 if __name__ == "__main__":
