@@ -171,37 +171,3 @@ def run_bbox_evaluation():
     max_lon = float(input("  Max Longitude eg. 116.3185: "))
     bbox = (min_lat, max_lat, min_lon, max_lon)
     evaluate_all_files(bbox)
-
-# not used in the current implementation
-
-# files = {
-#     "Base Parquet": (load_base_parquet, run_bbox_query_on_points, base_parquet_path),
-#     "Base Parquet (Optimized)": (load_base_parquet_bbox_only, run_bbox_query_on_points, base_parquet_path),
-#     "Base Parquet (Pushdown)": (lambda p: load_base_parquet_with_pushdown(p, bbox), run_bbox_query_on_points, base_parquet_path),
-#     "CSV File": (load_csv, run_bbox_query_on_points, csv_path),
-
-#     "Fixed Segments (Default)": (load_segmented_parquet, run_bbox_query_on_segments, seg_fixed_path),
-#     "Fixed Segments (NumPy)": (load_segmented_parquet, run_bbox_query_on_segments_numpy, seg_fixed_path),
-#     "Fixed Segments (NumPy V2 Raw)": (load_segmented_parquet, run_bbox_query_on_segments_numpy2, seg_fixed_path),
-#     "Fixed Segments (Numpy v2 Combined)": (load_segmented_parquet,run_bbox_query_on_segments_numpy_v2,seg_fixed_path),
-#     "Fixed Segments (Optimized)": (lambda p: p, run_bbox_query_on_segments_optimized, seg_fixed_path),
-#     "Fixed Segments (Pushdown)": (lambda p: load_segmented_parquet_with_pushdown(p, bbox), run_bbox_query_on_segments_numpy2, seg_fixed_path),
-#     "Fixed Segments (Pushdown Optimized)": (lambda p: load_segmented_parquet_with_pushdown_optimized(p, bbox),run_bbox_query_on_segments_numpy2_optimized,seg_fixed_path),
-#     "Fixed Segments (Pushdown v2)": (lambda p: load_segmented_parquet_with_pushdown_optimized_v2(p, bbox),run_bbox_query_on_segments_numpy2_optimized_v2,seg_fixed_path),
-#     "Fixed Segments (Pushdown v3 NP)": (lambda p: load_segmented_parquet_with_pushdown_v3_np(p, bbox), run_bbox_query_on_segments_numpy2_optimized_v2, seg_fixed_path),
-#     "Fixed Segments (Vectorized)": (lambda p: load_segmented_parquet_with_pushdown_v3_np(p, bbox),lambda df, bbox: vectorized_bbox_query(df, bbox),seg_fixed_path),
-#     "Fixed Segments (Memory Optimized Batch)": (lambda p: load_segmented_parquet_with_pushdown_v3_np(p, bbox),lambda df, bbox: memory_optimized_batch_query(df, bbox, batch_size=50000),seg_fixed_path),
-
-
-#     "Grid Segments (Default)": (load_segmented_parquet, run_bbox_query_on_segments, seg_grid_path),
-#     "Grid Segments (NumPy)": (load_segmented_parquet, run_bbox_query_on_segments_numpy, seg_grid_path),
-#     "Grid Segments (NumPy V2 Raw)": (load_segmented_parquet, run_bbox_query_on_segments_numpy2, seg_grid_path),
-#     "Grid Segments (Numpy v2 Combined)": (load_segmented_parquet,run_bbox_query_on_segments_numpy_v2,seg_grid_path),
-#     "Grid Segments (Optimized)": (lambda p: p, run_bbox_query_on_segments_optimized, seg_grid_path),
-#     "Grid Segments (Pushdown)": (lambda p: load_segmented_parquet_with_pushdown(p, bbox), run_bbox_query_on_segments_numpy2, seg_grid_path),
-#     "Grid Segments (Pushdown Optimized)": (lambda p: load_segmented_parquet_with_pushdown_optimized(p, bbox),run_bbox_query_on_segments_numpy2_optimized,seg_grid_path),
-#     "Grid Segments (Pushdown v2)": (lambda p: load_segmented_parquet_with_pushdown_optimized_v2(p, bbox),run_bbox_query_on_segments_numpy2_optimized_v2,seg_grid_path),
-#     "Grid Segments (Pushdown v3 NP)": (lambda p: load_segmented_parquet_with_pushdown_v3_np(p, bbox), run_bbox_query_on_segments_numpy2_optimized_v2, seg_grid_path),
-#     "Grid Segments (Vectorized)": (lambda p: load_segmented_parquet_with_pushdown_v3_np(p, bbox),lambda df, bbox: vectorized_bbox_query(df, bbox),seg_grid_path),
-#     "Grid Segments (Memory Optimized Batch)": (lambda p: load_segmented_parquet_with_pushdown_v3_np(p, bbox),lambda df, bbox: memory_optimized_batch_query(df, bbox, batch_size=50000),seg_grid_path)
-# }
