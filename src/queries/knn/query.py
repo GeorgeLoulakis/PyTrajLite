@@ -172,7 +172,7 @@ def run_knn_query_on_segments(
     result = (
         df_pts
         .sort_values("distance")
-        .drop_duplicates(subset=["lat", "lon"], keep="first")
+        # .drop_duplicates(subset=["lat", "lon"], keep="first")
         .head(k)
         .reset_index(drop=True)
     )
