@@ -85,35 +85,52 @@ def run_knn_general_interactive():
     else:
         print("No results found in Fixed Segments.")
 
-    # --- 4) Grid Segments: load only needed cols + query ---
-    t0 = time.time()
-    df_grid = pd.read_parquet(
-        grid_path,
-        columns=[
-            "entity_id",
-            "vals_x",
-            "vals_y",
-            "grid_cell",
-            "min_x",
-            "max_x",
-            "min_y",
-            "max_y"
-        ]
-    )
-    t_load_grid = time.time() - t0
+    # --- 4) Grid Segments: coarse pre-filter + precise kNN ---
+    from src.models.grid import Grid
 
+    # (a) load metadata for grid segments
     t0 = time.time()
-    grid_results = run_knn_query_on_segments(
-        df_grid, (lat, lon), k,
-        start_lat_col="min_x", start_lon_col="min_y",
-        end_lat_col="max_x",   end_lon_col="max_y",
-        grid_cell_col="grid_cell",
-        cell_size=0.001, grid_ring=1
-    )
-    t_query_grid = time.time() - t0
+    meta_cols = ["entity_id", "grid_cell", "min_x", "max_x", "min_y", "max_y"]
+    df_meta = pd.read_parquet(grid_path, columns=meta_cols)
 
-    if not grid_results.empty:
-        grid_results = grid_results.drop_duplicates(subset=["lat", "lon"] )
+    # create grid and find neighbors
+    # (x=lat, y=lon) so min_x/max_x are lat bounds
+    grid = Grid(
+        min_lat   = df_meta["min_x"].min(),
+        max_lat   = df_meta["max_x"].max(),
+        min_lon   = df_meta["min_y"].min(),
+        max_lon   = df_meta["max_y"].max(),
+        cell_size = 0.001
+    )
+    ref_cell  = grid.get_cell_id(lat, lon)
+    neighbors = [
+        f"{ref_cell[0]+di}_{ref_cell[1]+dj}"
+        for di in (-1, 0, 1)
+        for dj in (-1, 0, 1)
+    ]
+
+    # Coarse filter στα metadata
+    df_meta = df_meta[df_meta["grid_cell"].isin(neighbors)]
+
+    if df_meta.empty:
+        # if no segments match the coarse filter, skip the query
+        t_load_grid  = time.time() - t0
+        t_query_grid = 0.0
+        grid_results = pd.DataFrame(columns=["traj_id", "lat", "lon", "distance"])
+    else:
+        # (b) load only the necessary columns for the filtered segments
+        t_load_grid = None
+        df_grid = pd.read_parquet(
+            grid_path,
+            columns=["entity_id", "vals_x", "vals_y"],
+            filters=[("entity_id", "in", df_meta["entity_id"].tolist())]
+        )
+        t_load_grid = time.time() - t0
+
+        # (c) execute kNN query on the filtered segments
+        t1 = time.time()
+        grid_results = run_knn_query_on_segments(df_grid, (lat, lon), k)
+        t_query_grid = time.time() - t1
 
     print(f"\n{'='*10} kNN Grid Segments {'='*10}")
     print(f"Load time: {t_load_grid:.4f}s, Query time: {t_query_grid:.4f}s")
@@ -121,6 +138,7 @@ def run_knn_general_interactive():
         print(grid_results.to_string(index=False))
     else:
         print("No results found in Grid Segments.")
+
 
     # --- 5) Summary ---
     summary = pd.DataFrame([
