@@ -37,7 +37,11 @@ def run_knn_query(
     df["distance"] = haversine_vectorized(
         ref_lat, ref_lon, df[lat_col].values, df[lon_col].values
     )
-    result = df.nsmallest(k, "distance")[["distance"]]
+    # result = df.nsmallest(k, "distance")[["distance"]]
+    # sort → drop exact lat/lon duplicates → take top-k
+    df_sorted = df.sort_values("distance")
+    df_unique = df_sorted.drop_duplicates(subset=[lat_col, lon_col], keep="first")
+    result = df_unique.head(k)[["distance"]]
     duration = time.time() - start
     return duration, result
 
@@ -172,7 +176,7 @@ def run_knn_query_on_segments(
     result = (
         df_pts
         .sort_values("distance")
-        # .drop_duplicates(subset=["lat", "lon"], keep="first")
+        .drop_duplicates(subset=["lat", "lon"], keep="first")
         .head(k)
         .reset_index(drop=True)
     )
@@ -242,7 +246,7 @@ def run_knn_query_on_fixed_segments_vectorized(
     top_k = results[:k]
 
     df_result = pd.DataFrame(results, columns=["traj_id", "lat", "lon", "distance"])
-    #df_result = df_result.drop_duplicates(subset=["lat", "lon"])
+    df_result = df_result.drop_duplicates(subset=["lat", "lon"])
     df_result = df_result.sort_values("distance").head(k).reset_index(drop=True)
     elapsed = time.time() - start
     print(f"kNN query (fixed+vectorized) executed in {elapsed:.3f} seconds.")
