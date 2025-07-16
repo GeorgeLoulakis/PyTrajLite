@@ -3,6 +3,7 @@ Main entry point for PyTrajLite
 Handles user options, loads data, and manages Parquet and CSV generation.
 """
 
+
 from pathlib import Path
 from time import time
 from datetime import datetime
@@ -222,6 +223,45 @@ def generate_geoparquet_versions(base_parquet_path: Path):
     except Exception as e:
         print(f"[GeoParquet] Error during creation: {e}")
 
+def print_all_metrics(base_dir: Path = Path("data/processed")):
+    """
+    Scan all .parquet and .csv files in base_dir (non-recursively)
+    and print read time, file size (MB), row count, and throughput (rows/sec).
+    """
+    import os
+    from time import time
+    import pandas as pd
+
+    # gather all .parquet and .csv files
+    files = [
+        p for p in base_dir.iterdir()
+        if p.is_file() and p.suffix.lower() in (".parquet", ".csv")
+    ]
+
+    for path in sorted(files, key=lambda p: p.name):
+        # measure read time
+        t0 = time()
+        if path.suffix.lower() == ".csv":
+            df = pd.read_csv(path)
+        else:
+            df = pd.read_parquet(path)
+        read_time = time() - t0
+
+        # file size (MB)
+        size_mb = os.path.getsize(path) / (1024 * 1024)
+
+        # row count and throughput
+        row_count = len(df)
+        throughput = row_count / read_time if read_time > 0 else float("inf")
+
+        # print metrics
+        print(f"\n=== Metrics for {path.name} ===")
+        print(f"Read time    : {read_time:.2f} s")
+        print(f"File size    : {size_mb:.2f} MB")
+        print(f"Rows         : {row_count:,}")
+        print(f"Throughput   : {throughput:,.0f} rows/s")
+
+
 # Menu Option 1: Generate all required Parquet files
 def create_parquet_from_raw():
     """Main workflow for creating all necessary Parquet and GeoParquet files."""
@@ -262,7 +302,10 @@ def create_parquet_from_raw():
 
     if not fixed_knn_path.exists():
         print("\nCreating kNN-ready fixed segments (centroid + bbox)…")
+        start = time()
         build_knn_fixed_index(fixed_parquet_path, fixed_knn_path)
+        wt = time() - start
+        print(f"Write time       : {wt:.2f} seconds.")
         print(f"kNN-ready fixed segments saved to: {fixed_knn_path}")
     else:
         print(f"\nFixed-knn-size segments already exist at: {fixed_knn_path}")
@@ -274,7 +317,10 @@ def create_parquet_from_raw():
 
     if not grid_knn_path.exists():
         print("\nCreating kNN-ready grid segments (grid_cell index)…")
+        start = time()
         build_knn_grid_index(grid_parquet_path, grid_knn_path)
+        wt = time() - start
+        print(f"Write time       : {wt:.2f} seconds.")
         print(f"kNN-ready grid segments saved to: {grid_knn_path}")
     else:
         print(f"\nGrid-knn-size segments already exist at: {grid_knn_path}")
@@ -284,6 +330,8 @@ def create_parquet_from_raw():
     else:
         print(f"[GeoParquet] GeoParquet already exists: {geoparquet_path}")
 
+    print("\n\n\n\n\n\nAll Parquet files are ready.")
+    print_all_metrics()
     pause_and_clear()
 
 # Menu Option 2: BBox Query on regular Parquet files
